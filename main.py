@@ -24,7 +24,7 @@ __version__ = "0.2"
 
 
 def _extract_title_from_input(user_input):
-    if user_input.startswith("http://") or user_input.startswith("https://"):
+    if user_input.startswith(("http://", "https://")):
         # .../wiki/Article_Name -> Article Name
         title = user_input.rsplit("/wiki/", 1)[-1]
         return title.replace("_", " ")
@@ -77,6 +77,9 @@ def _print_findings(title, findings):
 
 
 def run_check(target, session=None):
+    """Checks a single article (title/URL) or local wikitext file and
+    prints its findings to the console. Returns a process exit code (0
+    on success, 1 if the target/template couldn't be resolved)."""
     session = session or fetch.get_session()
 
     if os.path.isfile(target):
@@ -134,6 +137,10 @@ def run_check(target, session=None):
 
 
 def run_scan(limit=None, output="report.html", use_cache=True, open_output=False):
+    """Fetches all articles embedding the template, runs the rule checks
+    across the whole corpus, and writes the HTML report. Returns a
+    process exit code (0 on success, 1 if the report couldn't be
+    written)."""
     session = fetch.get_session()
 
     print("Fetching articles that embed the template ...")
@@ -192,6 +199,8 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
 
 
 def main():
+    """Parses CLI arguments and dispatches to run_check or run_scan.
+    Returns a process exit code."""
     parser = argparse.ArgumentParser(
         description="Consistency checker for Wikipedia Vorlage:Infobox templates",
     )

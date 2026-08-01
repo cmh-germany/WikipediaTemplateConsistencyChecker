@@ -88,6 +88,8 @@ def rule_title(rule_id):
 
 @dataclass
 class Finding:
+    """A single consistency-check result produced by a check_* rule."""
+
     rule_id: str
     severity: str
     message: str
@@ -109,6 +111,9 @@ class Context:
     discipline_exists: dict | None = None  # {"100-Meter-Lauf": True, ...}, optional
 
     def get(self, key):
+        """Like dict.get, but defaults to "" (not None) and strips
+        whitespace, so rules can use the result directly in truthiness
+        checks and string formatting without a None-guard."""
         return self.params.get(key, "").strip()
 
 
@@ -370,7 +375,7 @@ def check_height_weight_plausibility(ctx):
             )
             continue
         value = int(m.group(1))
-        if not (lo <= value <= hi):
+        if not lo <= value <= hi:
             findings.append(
                 Finding(
                     f"{label}_implausible",
@@ -630,6 +635,8 @@ ALL_RULES = [
 def run_all_checks(
     params, categories=None, today=None, nation_exists=None, discipline_exists=None
 ):
+    """Runs every rule in ALL_RULES against the given infobox params and
+    returns all findings, sorted from most to least severe."""
     ctx = Context(
         params=params,
         categories=categories or [],

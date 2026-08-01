@@ -90,6 +90,18 @@ def _api_query(session, params, stop_when=None):
     return merged
 
 
+def _merge_page(existing, page):
+    """Merges one 'pages' entry from a continuation batch into the
+    already-collected entry for the same title: list-valued fields
+    (e.g. 'categories') are extended, everything else is overwritten."""
+    for pkey, pval in page.items():
+        if isinstance(pval, list):
+            existing.setdefault(pkey, [])
+            existing[pkey].extend(pval)
+        else:
+            existing[pkey] = pval
+
+
 def _merge_query(merged, query):
     for key, value in query.items():
         if key != "pages":
@@ -102,14 +114,8 @@ def _merge_query(merged, query):
         for page in value:
             title = page.get("title")
             existing = merged["pages"].setdefault(title, page)
-            if existing is page:
-                continue
-            for pkey, pval in page.items():
-                if isinstance(pval, list):
-                    existing.setdefault(pkey, [])
-                    existing[pkey].extend(pval)
-                else:
-                    existing[pkey] = pval
+            if existing is not page:
+                _merge_page(existing, page)
 
 
 def list_pages_using_template(session, template_name=TEMPLATE_NAME, limit=None):

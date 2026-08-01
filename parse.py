@@ -184,6 +184,11 @@ def _category_label_text(value):
     # | {{DDR}} }}) already takes any nested templates with it, and
     # asking to remove those separately afterwards raises ValueError
     # since they're no longer present in the tree.
+    #
+    # list(...) is required, not just stylistic: filter_templates/
+    # filter_wikilinks return a lazy view over the wikicode tree, and
+    # remove()/replace() below mutate that same tree while iterating --
+    # without materializing the results first, nodes get skipped.
     for tmpl in list(code.filter_templates(recursive=False)):
         code.remove(tmpl)
     for link in list(code.filter_wikilinks(recursive=True)):
@@ -349,7 +354,7 @@ def date_range(parts):
     outside a plausible range."""
     if parts is None or parts.year is None:
         return None
-    if not (1850 <= parts.year <= 2100):
+    if not 1850 <= parts.year <= 2100:
         return None
 
     month_known = parts.month is not None
