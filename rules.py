@@ -48,11 +48,15 @@ STATUS_FULL_WORDS = {
 # the raw rule_id itself if a title is missing here, so a forgotten
 # entry never breaks the report.
 RULE_TITLES = {
-    "death_date_with_non_deceased_status": "Death date given despite non-deceased status",
+    "death_date_with_non_deceased_status": (
+        "Death date given despite non-deceased status"
+    ),
     "status_deceased_without_death_date": "Deceased status without a death date",
     "status_code_spelled_out": "Status code spelled out instead of abbreviated",
     "invalid_status_code": "Invalid status code",
-    "deceased_but_living_person_category": "Deceased but still in the living-people category",
+    "deceased_but_living_person_category": (
+        "Deceased but still in the living-people category"
+    ),
     "death_date_before_birth_date": "Death date before birth date",
     "birth_date_in_future": "Birth date in the future",
     "death_date_in_future": "Death date in the future",

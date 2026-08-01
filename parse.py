@@ -258,7 +258,9 @@ def medal_totals_by_category(value):
         entry = result.setdefault(
             key, {"label": label, "gold": 0, "silber": 0, "bronze": 0}
         )
-        for color, param in zip(("gold", "silber", "bronze"), positional[1:4]):
+        for color, param in zip(
+            ("gold", "silber", "bronze"), positional[1:4], strict=True
+        ):
             m = re.match(r"\d+", str(param.value).strip())
             if m:
                 entry[color] += int(m.group(0))
