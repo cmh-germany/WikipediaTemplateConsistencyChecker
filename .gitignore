@@ -4,3 +4,4 @@ cache.json
 report.html
 .venv/
 .pytest_cache/
+.coverage
