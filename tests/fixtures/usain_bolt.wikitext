@@ -1,0 +1,68 @@
+{{Infobox Leichtathlet
+<!-- Allgemeine Informationen -->
+| kurzname = Usain Bolt
+| bild = [[Datei:Usain Bolt smiling Berlin 2009.JPG|260px|Usain Bolt (2009)]]
+| bildbeschreibung = Usain Bolt bei den Weltmeisterschaften in Berlin 2009
+| langname = Usain St. Leo Bolt
+| nation = {{JAM}}
+| geburtstag = 21. August 1986 ({{Alter|1986|08|21}} Jahre)
+| geburtsort = [[Sherwood Content]]
+| geburtsland = [[Jamaika]]
+| groesse = 195
+| gewicht = 94
+| beruf =
+| sterbedatum =
+| sterbeort =
+| sterbeland =
+<!-- Karriere -->
+| disziplin = [[100-Meter-Lauf|100 m]], [[200-Meter-Lauf|200 m]], [[4-mal-100-Meter-Staffel|4 × 100 m]]
+| verein = Racers Track Club
+| trainer = [[Glen Mills (Leichtathletiktrainer)|Glen Mills]]
+| nationalkader =
+<!-- Status-Kürzel: a für aktiv, g für gesperrt, n für nicht aktiv, v für verstorben, z für zurückgetreten -->
+| status = z
+| karriereende = 12. August 2017
+<!-- Medaillen -->
+| Medaillenspiegel =
+{{Medaillenspiegel | Olympische Spiele |8|0|0}}
+{{Medaillenspiegel | Weltmeisterschaften |11|2|1}}
+{{Medaillenspiegel | Juniorenweltmeisterschaften |1|2|0}}
+| medaillen =
+{{Medaillen Sommersport| Wo = Olympia
+|Gold |[[Olympische Sommerspiele 2008/Leichtathletik|2008 Peking]] |[[Olympische Sommerspiele 2008/Leichtathletik – 100 m (Männer)|100 m]]
+|Gold |2008 Peking |[[Olympische Sommerspiele 2008/Leichtathletik – 200 m (Männer)|200 m]]
+|Gold |[[Olympische Sommerspiele 2012/Leichtathletik|2012 London]] |[[Olympische Sommerspiele 2012/Leichtathletik – 100 m (Männer)|100 m]]
+|Gold |2012 London |[[Olympische Sommerspiele 2012/Leichtathletik – 200 m (Männer)|200 m]]
+|Gold |2012 London |[[Olympische Sommerspiele 2012/Leichtathletik – 4 × 100 m (Männer)|4 × 100 m]]
+|Gold |[[Olympische Sommerspiele 2016/Leichtathletik|2016 Rio de Janeiro]] |[[Olympische Sommerspiele 2016/Leichtathletik – 100 m (Männer)|100 m]]
+|Gold |2016 Rio de Janeiro |[[Olympische Sommerspiele 2016/Leichtathletik – 200 m (Männer)|200 m]]
+|Gold |2016 Rio de Janeiro |[[Olympische Sommerspiele 2016/Leichtathletik – 4 × 100 m (Männer)|4 × 100 m]]}}
+{{Medaillen Sommersport| Wo = Leichtathletik-WM
+|Silber |[[Leichtathletik-Weltmeisterschaften 2007|2007 Osaka]] |[[Leichtathletik-Weltmeisterschaften 2007/200 m der Männer|200 m]]
+|Silber |2007 Osaka |[[Leichtathletik-Weltmeisterschaften 2007/4 × 100 m der Männer|4 × 100 m]]
+|Gold |[[Leichtathletik-Weltmeisterschaften 2009|2009 Berlin]] |[[Leichtathletik-Weltmeisterschaften 2009/200 m der Männer|200 m]]
+|Gold |2009 Berlin |[[Leichtathletik-Weltmeisterschaften 2009/100 m der Männer|100 m]]
+|Gold |2009 Berlin |[[Leichtathletik-Weltmeisterschaften 2009/4 × 100 m der Männer|4 × 100 m]]
+|Gold |[[Leichtathletik-Weltmeisterschaften 2011|2011 Daegu]] |[[Leichtathletik-Weltmeisterschaften 2011/200 m der Männer|200 m]]
+|Gold |2011 Daegu |[[Leichtathletik-Weltmeisterschaften 2011/4 × 100 m der Männer|4 × 100 m]]
+|Gold |[[Leichtathletik-Weltmeisterschaften 2013|2013 Moskau]] |[[Leichtathletik-Weltmeisterschaften 2013/4 × 100 m der Männer|4 × 100 m]]
+|Gold |2013 Moskau |[[Leichtathletik-Weltmeisterschaften 2013/100 m der Männer|100 m]]
+|Gold |2013 Moskau |[[Leichtathletik-Weltmeisterschaften 2013/200 m der Männer|200 m]]
+|Gold |[[Leichtathletik-Weltmeisterschaften 2015|2015 Peking]] |[[Leichtathletik-Weltmeisterschaften 2015/100 m der Männer|100 m]]
+|Gold |2015 Peking |[[Leichtathletik-Weltmeisterschaften 2015/200 m der Männer|200 m]]
+|Gold |2015 Peking |[[Leichtathletik-Weltmeisterschaften 2015/4 × 100 m der Männer|4 × 100 m]]
+|Bronze |[[Leichtathletik-Weltmeisterschaften 2017|2017 London]] |[[Leichtathletik-Weltmeisterschaften 2017/100 m der Männer|100 m]]}}
+{{Medaillen Sommersport| Wo = Leichtathletik-Junioren-WM
+|Gold |[[Leichtathletik-Juniorenweltmeisterschaften 2002|2002 Kingston]] |200 m
+|Silber |2002 Kingston |4 × 100 m
+|Silber |2002 Kingston |4 × 400 m}}
+{{Medaillen Sommersport| Wo = Leichtathletik-Jugend-WM
+|Gold |[[Leichtathletik-Jugendweltmeisterschaften 2003|2003 Sherbrooke]] |200 m}}
+{{Medaillen Sommersport | Wo = Commonwealth Games
+|Gold |[[Commonwealth Games 2014|2014 Glasgow]] |4 × 100 m}}
+{{Medaillen Sommersport| Wo = IAAF World Relays
+|Silber |[[IAAF World Relays 2015|2015 Nassau]] |4 × 100 m}}
+{{Medaillen Sommersport| Wo = Leichtathletik-Zentralamerika- und Karibikmeisterschaften
+|Gold |[[Leichtathletik-Zentralamerika- und Karibikmeisterschaften 2005|2005 Nassau]] |200 m}}
+| update = 10. Mai 2018
+}}

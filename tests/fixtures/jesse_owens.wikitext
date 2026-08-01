@@ -1,0 +1,36 @@
+{{Infobox Leichtathlet
+<!-- Allgemeine Informationen -->
+| kurzname         = Jesse Owens
+| bild             = Jesse Owens 1936.jpg
+| bildbeschreibung = Jesse Owens 1936
+| langname         = James Cleveland Owens
+| nation           = {{USA}}
+| geburtstag       = 12. September 1913
+| geburtsort       = [[Oakville (Alabama)|Oakville]], [[Alabama]]
+| geburtsland      = [[Vereinigte Staaten|USA]]
+| groesse          = 178
+| gewicht          = 71
+| beruf            = 
+| sterbedatum      = 31. März 1980
+| sterbeort        = [[Tucson]], [[Arizona]]
+| sterbeland       = [[Vereinigte Staaten|USA]]
+<!-- Karriere -->
+| disziplin        = [[Sprint]], [[Weitsprung]]
+| bestleistung     = 10,2 s ([[100-Meter-Lauf|100 m]])<br />20,7 s ([[200-Meter-Lauf|200 m]])<br />8,13 m (Weitsprung)
+| verein           = Ohio State Buckeyes
+| trainer          = 
+| nationalkader    = 
+<!-- Status-Kürzel: a für aktiv, g für gesperrt, n für nicht aktiv, v für verstorben, z für zurückgetreten -->
+| status           = v
+| karriereende     = 
+<!-- Medaillen -->
+| Medaillenspiegel = {{Medaillenspiegel|Olympische Spiele|4|0|0}}
+| medaillen        = 
+{{Medaillen Sommersport
+| Wo = Olympische Spiele
+| Gold | [[Olympische Sommerspiele 1936/Leichtathletik|Berlin 1936]] | [[Olympische Sommerspiele 1936/Leichtathletik – 100 m (Männer)|100 m]]
+| Gold | Berlin 1936 | [[Olympische Sommerspiele 1936/Leichtathletik – 200 m (Männer)|200 m]]
+| Gold | Berlin 1936 | [[Olympische Sommerspiele 1936/Leichtathletik – 4 × 100 m (Männer)|4 × 100 m]]
+| Gold | Berlin 1936 | [[Olympische Sommerspiele 1936/Leichtathletik – Weitsprung (Männer)|Weitsprung]]
+}}
+}}

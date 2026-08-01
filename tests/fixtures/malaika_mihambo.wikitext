@@ -1,0 +1,74 @@
+{{Infobox Leichtathlet
+<!-- Allgemeine Informationen -->
+| kurzname = 
+| bild = 2022-08-18 European Championships 2022 – Women's Long Jump by Sandro Halank–132.jpg
+| bildbeschreibung = Malaika Mihambo (2022)
+| langname = 
+| nation = DEU
+| geburtstag = 3. Februar 1994 ({{Alter|1994|02|03}} Jahre)
+| geburtsort = [[Heidelberg]]
+| geburtsland = [[Deutschland]]
+| groesse = 171
+| gewicht = 58
+| beruf = [[Politikwissenschaft]]lerin
+| sterbedatum = 
+| sterbeort = 
+| sterbeland = 
+<!-- Karriere -->
+| disziplin = [[Weitsprung]], [[Sprint]]
+| bestleistung = 7,30&nbsp;m (Weitsprung)<br />11,21 s ([[100-Meter-Lauf|100 m]])
+| verein = [[LG Kurpfalz]]<br />(Stammverein [[TSV Oftersheim]])
+| trainer = Ulrich Knapp, vorm.: Ralf Weber
+| nationalkader = 2013
+<!-- Status-Kürzel: a für aktiv, g für gesperrt, n für nicht aktiv, v für verstorben, z für zurückgetreten -->| status = a
+| karriereende = 
+<!-- Medaillen -->
+| Medaillenspiegel = 
+{{Medaillenspiegel|Olympische Spiele             |1|1|0}}
+{{Medaillenspiegel|Weltmeisterschaften           |2|1|0}}
+{{Medaillenspiegel|Europameisterschaften         |2|1|1}}
+{{Medaillenspiegel|Halleneuropameisterschaften   |0|1|1}}
+{{Medaillenspiegel|Deutsche Meisterschaften      |8|1|3}}
+{{Medaillenspiegel|Deutsche Hallenmeisterschaften|9|1|0}}
+| medaillen = 
+{{Medaillen Sommersport | Wo = Olympische Spiele
+| Gold| [[Olympische Sommerspiele 2020/Leichtathletik|2020 Tokio]]| [[Olympische Sommerspiele 2020/Leichtathletik – Weitsprung (Frauen)|7,00 m]]
+| Silber| [[Olympische Sommerspiele 2024/Leichtathletik|2024 Paris]]| [[Olympische Sommerspiele 2024/Leichtathletik – Weitsprung (Frauen)|6,98 m]]}}
+{{Medaillen Sommersport | Wo = Leichtathletik-Weltmeisterschaften
+| Gold| [[Leichtathletik-Weltmeisterschaften 2019|2019 Doha]]| [[Leichtathletik-Weltmeisterschaften 2019/Weitsprung der Frauen|7,30 m]]
+| Gold| [[Leichtathletik-Weltmeisterschaften 2022|2022 Eugene]]| [[Leichtathletik-Weltmeisterschaften 2022/Weitsprung der Frauen|7,12 m]]
+| Silber| [[Leichtathletik-Weltmeisterschaften 2025|2025 Tokio]]| [[Leichtathletik-Weltmeisterschaften 2025/Weitsprung der Frauen|6,99 m]]}}
+{{Medaillen Sommersport| Wo = Leichtathletik-Europameisterschaften
+| Bronze| [[Leichtathletik-Europameisterschaften 2016|2016 Amsterdam]]| [[Leichtathletik-Europameisterschaften 2016/Weitsprung der Frauen|6,65 m]]
+| Gold| [[Leichtathletik-Europameisterschaften 2018|2018 Berlin]]| [[Leichtathletik-Europameisterschaften 2018/Weitsprung der Frauen|6,75 m]]
+| Silber| [[Leichtathletik-Europameisterschaften 2022|2022 München]]| [[Leichtathletik-Europameisterschaften 2022/Weitsprung der Frauen|7,03 m]]
+| Gold| [[Leichtathletik-Europameisterschaften 2024|2024 Rom]]| [[Leichtathletik-Europameisterschaften 2024/Weitsprung der Frauen|7,22 m]]}}
+{{Medaillen Sommersport| Wo = Leichtathletik-Halleneuropameisterschaften
+| Silber| [[Leichtathletik-Halleneuropameisterschaften 2021|2021 Toruń]]| 6,88 m
+| Bronze| [[Leichtathletik-Halleneuropameisterschaften 2025|2025 Apeldoorn]]| 6,88 m}}
+{{Medaillen Sommersport| Wo = Deutsche Leichtathletik-Meisterschaften
+| Bronze| [[Deutsche Leichtathletik-Meisterschaften 2014|2014 Ulm]]| 6,60 m
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2016|2016 Kassel]]| 6,72 m
+| Bronze| [[Deutsche Leichtathletik-Meisterschaften 2017|2017 Erfurt]]| 6,62 m
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2018|2018 Nürnberg]]| 6,72 m
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2019|2019 Berlin]]| 7,16 m
+| Bronze| 2019 Berlin| 100&nbsp;m: 11,21&nbsp;s
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2020|2020 Braunschweig]]| 6,71 m
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2021|2021 Braunschweig]]| 6,62 m
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2022|2022 Berlin]]| 6,85 m
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2023|2023 Kassel]]| 6,93 m
+| Gold| [[Deutsche Leichtathletik-Meisterschaften 2025|2025 Dresden]]| 6,82 m
+| Silber| [[Deutsche Leichtathletik-Meisterschaften 2026|2026 Bochum-Wattenscheid]]| 6,63 m}}
+{{Medaillen Sommersport| Wo = Deutsche Leichtathletik-Hallenmeisterschaften
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2018|2018 Dortmund]]| 6,68 m
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2019|2019 Leipzig]]| 6,72 m
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2020|2020 Leipzig]]| 6,77 m
+| Silber| 2020 Leipzig| 60&nbsp;m: 7,22&nbsp;s
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2021|2021 Dortmund]]| 6,70 m
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2022|2022 Leipzig]]| 6,81 m
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2023|2023 Dortmund]]| 6,66 m
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2024|2024 Leipzig]]| 6,93 m
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2025|2025 Dortmund]]| 6,79 m
+| Gold| [[Deutsche Leichtathletik-Hallenmeisterschaften 2026|2026 Dortmund]]| 6,57 m}}
+| update = 1. März 2026
+}}

@@ -1,0 +1,74 @@
+{{Infobox Leichtathlet
+<!-- Allgemeine Informationen -->
+| kurzname         = Heike Drechsler
+| bild             = Heike Drechsler (2) (cropped).JPG
+| bildbeschreibung = Heike Drechsler (2015)
+| langname         = Heike Gabriela Drechsler
+| nation           = {{GDR|2=DDR}}, {{DEU}}
+| geburtstag       = 16. Dezember 1964 ({{Alter|1964|12|16}} Jahre)
+| geburtsort       = [[Gera]]
+| geburtsland      = {{GDR|2=DDR}}
+| groesse          = 181
+| gewicht          = 68
+| beruf            =
+| sterbedatum      =
+| sterbeort        =
+| sterbeland       =
+<!-- Karriere -->
+| disziplin        = [[Sprint]], [[Weitsprung]], [[Siebenkampf]]
+| bestleistung     = 10,91 s ([[100-Meter-Lauf|100 m]])<br />21,71 s ([[200-Meter-Lauf|200 m]])<br />7,48 m (Weitsprung)
+| verein           = [[SC Motor Jena]], [[TuS Jena]]
+| trainer          =
+| nationalkader    =
+<!-- Status-Kürzel: a für aktiv, g für gesperrt, n für nicht aktiv, v für verstorben, z für zurückgetreten -->
+| status           = z
+| karriereende     = 2004
+<!-- Medaillen -->
+| Medaillenspiegel =
+{{Medaillenspiegel |Olympische Spiele |2|1|2}}
+{{Medaillenspiegel |Weltmeisterschaften |2|2|2}}
+{{Medaillenspiegel |Hallenweltmeisterschaften |2|1|0}}
+{{Medaillenspiegel |Europameisterschaften |5|1|0}}
+{{Medaillenspiegel |Halleneuropameisterschaften |4|1|2}}
+{{Medaillenspiegel |Weltcup |3|0|0}}
+{{Medaillenspiegel |Europacup |1|0|0}}
+| medaillen =
+{{Medaillen Sommersport | Wo = Olympische Spiele
+| Silber | [[Olympische Sommerspiele 1988/Leichtathletik|Seoul 1988]] | [[Olympische Sommerspiele 1988/Leichtathletik – Weitsprung (Frauen)|Weitsprung]]
+| Bronze | Seoul 1988 | [[Olympische Sommerspiele 1988/Leichtathletik – 100 m (Frauen)|100 m]]
+| Bronze | Seoul 1988 | [[Olympische Sommerspiele 1988/Leichtathletik – 200 m (Frauen)|200 m]]
+| Gold | [[Olympische Sommerspiele 1992/Leichtathletik|Barcelona 1992]] | [[Olympische Sommerspiele 1992/Leichtathletik – Weitsprung (Frauen)|Weitsprung]]
+| Gold | [[Olympische Sommerspiele 2000/Leichtathletik|Sydney 2000]] | [[Olympische Sommerspiele 2000/Leichtathletik – Weitsprung (Frauen)|Weitsprung]]}}
+{{Medaillen Sommersport | Wo = Leichtathletik-WM
+| Gold | [[Leichtathletik-Weltmeisterschaften 1983|Helsinki 1983]] | [[Leichtathletik-Weltmeisterschaften 1983/Weitsprung der Frauen|Weitsprung]]
+| Silber | [[Leichtathletik-Weltmeisterschaften 1987|Rom 1987]] | [[Leichtathletik-Weltmeisterschaften 1987/100 m der Frauen|100 m]]
+| Bronze | Rom 1987 | [[Leichtathletik-Weltmeisterschaften 1987/Weitsprung der Frauen|Weitsprung]]
+| Silber | [[Leichtathletik-Weltmeisterschaften 1991|Tokio 1991]] | [[Leichtathletik-Weltmeisterschaften 1991/Weitsprung der Frauen|Weitsprung]]
+| Bronze | Tokio 1991 | [[Leichtathletik-Weltmeisterschaften 1991/4 × 100 m der Frauen|4 × 100 m]]
+| Gold | [[Leichtathletik-Weltmeisterschaften 1993|Stuttgart 1993]] | [[Leichtathletik-Weltmeisterschaften 1993/Weitsprung der Frauen|Weitsprung]]}}
+{{Medaillen Sommersport | Wo = Leichtathletik-Hallen-WM
+| Gold | [[Leichtathletik-Hallenweltmeisterschaften 1987|Indianapolis 1987]] | Weitsprung
+| Gold | Indianapolis 1987 | 200 m
+| Silber | [[Leichtathletik-Hallenweltmeisterschaften 1991|Sevilla 1991]] | Weitsprung}}
+{{Medaillen Sommersport | Wo = Leichtathletik-EM
+| Gold | [[Leichtathletik-Europameisterschaften 1986|Stuttgart 1986]] | [[Leichtathletik-Europameisterschaften 1986/200 m der Frauen|200 m]]
+| Gold | Stuttgart 1986 | [[Leichtathletik-Europameisterschaften 1986/Weitsprung der Frauen|Weitsprung]]
+| Gold | [[Leichtathletik-Europameisterschaften 1990|Split 1990]] | [[Leichtathletik-Europameisterschaften 1990/Weitsprung der Frauen|Weitsprung]]
+| Silber | Split 1990 | [[Leichtathletik-Europameisterschaften 1990/200 m der Frauen|200 m]]
+| Gold | [[Leichtathletik-Europameisterschaften 1994|Helsinki 1994]] | [[Leichtathletik-Europameisterschaften 1994/Weitsprung der Frauen|Weitsprung]]
+| Gold | [[Leichtathletik-Europameisterschaften 1998|Budapest 1998]] | [[Leichtathletik-Europameisterschaften 1998/Weitsprung der Frauen|Weitsprung]]}}
+{{Medaillen Sommersport | Wo = Leichtathletik-Hallen-EM
+| Bronze | [[Leichtathletik-Halleneuropameisterschaften 1983|Güteborg 1983]] | Weitsprung
+| Bronze | [[Leichtathletik-Halleneuropameisterschaften 1985|Athen 1985]] | Weitsprung
+| Gold | [[Leichtathletik-Halleneuropameisterschaften 1986|Madrid 1986]] | Weitsprung
+| Gold | [[Leichtathletik-Halleneuropameisterschaften 1987|Liévin 1987]] | Weitsprung
+| Gold | [[Leichtathletik-Halleneuropameisterschaften 1988|Budapest 1988]] | Weitsprung
+| Gold | [[Leichtathletik-Halleneuropameisterschaften 1994|Paris 1994]] | Weitsprung
+| Silber | [[Leichtathletik-Halleneuropameisterschaften 2000|Gent 2000]] | Weitsprung}}
+{{Medaillen Sommersport | Wo = Leichtathletik-Weltcup
+| Gold | [[Leichtathletik-Weltcup 1985|Canberra 1985]] | Weitsprung
+| Gold | [[Leichtathletik-Weltcup 1992|Havanna 1992]] | Weitsprung
+| Gold | [[Leichtathletik-Weltcup 1998|Johannesburg 1998]] | Weitsprung}}
+{{Medaillen Sommersport | Wo = Leichtathletik-Europacup
+| Gold | [[Leichtathletik-Europacup 2001|Bremen 2001]] | Weitsprung}}
+}}
