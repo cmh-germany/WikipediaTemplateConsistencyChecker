@@ -11,12 +11,25 @@ replaces run_scan itself, to keep the suite network-free."""
 
 import os
 import sys
+from typing import Any
 
 import pytest
 
 import main
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+def _recording_stub(calls: list[dict]):
+    """Stub for run_scan: records its kwargs into `calls` and returns 0
+    (a successful exit code), for tests that assert run_scan was never
+    (or was) invoked with particular arguments."""
+
+    def _stub(**kw):
+        calls.append(kw)
+        return 0
+
+    return _stub
 
 
 # ---------------------------------------------------------------------
@@ -133,7 +146,7 @@ def test_limit_rejects_zero(monkeypatch):
 
 def test_limit_accepts_positive_value(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--limit", "10"])
-    calls = {}
+    calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
     assert calls["limit"] == 10
@@ -144,8 +157,8 @@ def test_check_rejects_empty_target(monkeypatch):
     # check, `if args.check:` in main() would misread this as "--scan
     # was chosen" and silently run a full scan instead of erroring.
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", ""])
-    calls = []
-    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.append(kw) or 0)
+    calls: list[dict] = []
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
     with pytest.raises(SystemExit):
         main.main()
     assert calls == []
@@ -159,7 +172,7 @@ def test_check_rejects_whitespace_only_target(monkeypatch):
 
 def test_scan_invokes_run_scan_with_defaults(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--scan"])
-    calls = {}
+    calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
     assert calls == {
@@ -185,7 +198,7 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
             "--open",
         ],
     )
-    calls = {}
+    calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
     assert calls == {
@@ -198,7 +211,7 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
 
 def test_check_invokes_run_check_with_target(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", "Usain Bolt"])
-    calls = {}
+    calls: dict[str, Any] = {}
     monkeypatch.setattr(
         main, "run_check", lambda target: calls.update(target=target) or 0
     )
@@ -211,7 +224,7 @@ def test_check_passes_target_through_unmodified_url(monkeypatch):
     # run_check -- so the raw --check value must reach run_check as-is.
     url = "https://de.wikipedia.org/wiki/Usain_Bolt"
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", url])
-    calls = {}
+    calls: dict[str, Any] = {}
     monkeypatch.setattr(
         main, "run_check", lambda target: calls.update(target=target) or 0
     )
@@ -327,8 +340,8 @@ def test_run_check_local_file_unreadable_returns_1(monkeypatch, capsys, tmp_path
 def test_scan_rejects_output_path_in_nonexistent_directory(monkeypatch, tmp_path):
     bad_output = tmp_path / "no_such_subdir" / "report.html"
     monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--output", str(bad_output)])
-    calls = []
-    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.append(kw) or 0)
+    calls: list[dict] = []
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
 
     with pytest.raises(SystemExit):
         main.main()
@@ -338,8 +351,8 @@ def test_scan_rejects_output_path_in_nonexistent_directory(monkeypatch, tmp_path
 
 def test_scan_rejects_output_path_that_is_a_directory(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--output", str(tmp_path)])
-    calls = []
-    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.append(kw) or 0)
+    calls: list[dict] = []
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
 
     with pytest.raises(SystemExit):
         main.main()
@@ -349,7 +362,7 @@ def test_scan_rejects_output_path_that_is_a_directory(monkeypatch, tmp_path):
 def test_scan_accepts_output_path_in_existing_writable_directory(monkeypatch, tmp_path):
     output = tmp_path / "report.html"
     monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--output", str(output)])
-    calls = {}
+    calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
 
     main.main()

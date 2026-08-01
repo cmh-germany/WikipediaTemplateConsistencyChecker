@@ -104,9 +104,9 @@ class Context:
 
     params: dict
     categories: list = field(default_factory=list)
-    today: date = None
-    nation_exists: dict = None  # {"Vorlage:GER": True, ...}, optional
-    discipline_exists: dict = None  # {"100-Meter-Lauf": True, ...}, optional
+    today: date | None = None
+    nation_exists: dict | None = None  # {"Vorlage:GER": True, ...}, optional
+    discipline_exists: dict | None = None  # {"100-Meter-Lauf": True, ...}, optional
 
     def get(self, key):
         return self.params.get(key, "").strip()

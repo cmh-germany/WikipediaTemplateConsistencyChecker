@@ -5,6 +5,7 @@ date values."""
 import re
 from collections import namedtuple
 from datetime import date
+from typing import Any
 
 import mwparserfromhell
 
@@ -113,7 +114,7 @@ def extract_medal_years(value):
     entirely, which can otherwise contain unrelated numbers that merely
     look like years (e.g. a typo such as "1950 m Staffel", or a link
     target like "...von 1951 bis 1990...")."""
-    years = []
+    years: list[int] = []
     for _color, year_place, _discipline in _iter_medal_entries(value):
         text = visible_text(str(year_place.value))
         years.extend(int(y) for y in re.findall(r"(1[89]\d{2}|20\d{2})", text))
@@ -203,7 +204,7 @@ def medal_counts_by_category(value):
     {category_key: {"label": str, "gold": n, "silber": n, "bronze": n}},
     where category_key is normalize_competition_name(label) and "label"
     is the (cleaned) raw label, kept for display in messages."""
-    result = {}
+    result: dict[str, dict[str, Any]] = {}
     if not value:
         return result
     code = mwparserfromhell.parse(value)
@@ -238,7 +239,7 @@ def medal_totals_by_category(value):
     {category_key: {"label": str, "gold": n, "silber": n, "bronze": n}},
     same shape as medal_counts_by_category so the two can be compared
     key by key."""
-    result = {}
+    result: dict[str, dict[str, Any]] = {}
     if not value:
         return result
     code = mwparserfromhell.parse(value)

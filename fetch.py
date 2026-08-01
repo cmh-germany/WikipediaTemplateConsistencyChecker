@@ -9,6 +9,7 @@ have to reload every article each time.
 import json
 import os
 import time
+from typing import Any
 
 import requests
 
@@ -67,7 +68,7 @@ def _api_query(session, params, stop_when=None):
     params["format"] = "json"
     params["formatversion"] = "2"
 
-    merged = {}
+    merged: dict[str, Any] = {}
     while True:
         response = _get_with_retry(session, params)
         data = response.json()
