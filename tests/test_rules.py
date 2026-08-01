@@ -35,9 +35,16 @@ def check(params, **kwargs):
 # Integration sanity check: real, clean articles produce no findings
 # ---------------------------------------------------------------------
 
-@pytest.mark.parametrize("fixture_name", [
-    "bolt_params", "owens_params", "mihambo_params", "drechsler_params",
-])
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "bolt_params",
+        "owens_params",
+        "mihambo_params",
+        "drechsler_params",
+    ],
+)
 def test_real_clean_articles_produce_no_findings(fixture_name, request):
     params = request.getfixturevalue(fixture_name)
     findings = check(params)
@@ -47,6 +54,7 @@ def test_real_clean_articles_produce_no_findings(fixture_name, request):
 # ---------------------------------------------------------------------
 # status / sterbedatum
 # ---------------------------------------------------------------------
+
 
 def test_death_date_with_non_deceased_status_is_flagged():
     params = {"status": "a", "sterbedatum": "2020-01-01"}
@@ -95,6 +103,7 @@ def test_deceased_but_living_person_category_is_flagged():
 # ---------------------------------------------------------------------
 # geburtstag / sterbedatum date comparisons
 # ---------------------------------------------------------------------
+
 
 def test_death_date_before_birth_date_is_flagged():
     params = {"geburtstag": "2000-01-01", "sterbedatum": "1990-01-01"}
@@ -147,6 +156,7 @@ def test_career_end_with_non_active_status_real_bolt_no_finding(bolt_params):
 # nationalkader
 # ---------------------------------------------------------------------
 
+
 def test_national_squad_before_birth_is_flagged():
     params = {"geburtstag": "2000-01-01", "nationalkader": "1990"}
     assert "national_squad_before_birth" in finding_ids(check(params))
@@ -167,6 +177,7 @@ def test_national_squad_plausible_real_mihambo_no_finding(mihambo_params):
 # ---------------------------------------------------------------------
 # groesse / gewicht
 # ---------------------------------------------------------------------
+
 
 def test_height_comma_format_is_flagged():
     params = {"groesse": "1,95"}
@@ -191,15 +202,23 @@ def test_weight_implausible_too_heavy_is_flagged():
 def test_height_weight_real_bolt_plausible_no_finding(bolt_params):
     findings = check(bolt_params)
     ids = finding_ids(findings)
-    assert not {
-        "height_comma_format", "height_not_numeric", "height_implausible",
-        "weight_comma_format", "weight_not_numeric", "weight_implausible",
-    } & ids
+    assert (
+        not {
+            "height_comma_format",
+            "height_not_numeric",
+            "height_implausible",
+            "weight_comma_format",
+            "weight_not_numeric",
+            "weight_implausible",
+        }
+        & ids
+    )
 
 
 # ---------------------------------------------------------------------
 # nation
 # ---------------------------------------------------------------------
+
 
 def test_nation_nonstandard_format_is_flagged():
     params = {"nation": "Philippinen"}
@@ -244,6 +263,7 @@ def test_nation_multiple_templates_real_drechsler_no_finding(drechsler_params):
 # disziplin
 # ---------------------------------------------------------------------
 
+
 def test_discipline_link_unknown_is_flagged():
     params = {"disziplin": "Bogenschiessen"}
     findings = check(params, discipline_exists={"Bogenschiessen": False})
@@ -267,6 +287,7 @@ def test_discipline_already_wikilinked_real_bolt_skips_check(bolt_params):
 # ---------------------------------------------------------------------
 # medaillen / Medaillenspiegel
 # ---------------------------------------------------------------------
+
 
 def test_medal_count_mismatch_is_flagged():
     params = {
@@ -317,6 +338,7 @@ def test_medal_years_real_bolt_plausible_no_finding(bolt_params):
 # geburtsort / geburtsland
 # ---------------------------------------------------------------------
 
+
 def test_missing_birthplace_is_flagged_when_both_absent():
     params = {"status": "a"}
     assert "missing_birthplace" in finding_ids(check(params))
@@ -335,6 +357,7 @@ def test_birthplace_real_bolt_present_no_finding(bolt_params):
 # ---------------------------------------------------------------------
 # update
 # ---------------------------------------------------------------------
+
 
 def test_outdated_update_while_active_is_flagged():
     params = {"status": "a", "update": "2015-01-01"}

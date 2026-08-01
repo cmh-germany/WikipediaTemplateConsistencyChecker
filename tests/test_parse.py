@@ -21,6 +21,7 @@ from parse import DateParts
 # find_infobox / extract_params / parse_infobox_params
 # ---------------------------------------------------------------------
 
+
 def test_find_infobox_amid_surrounding_article_text(bolt_wikitext):
     wikitext = (
         "'''Usain Bolt''' (* 21. August 1986) ist ein ehemaliger "
@@ -93,6 +94,7 @@ def test_parse_infobox_params_returns_none_without_template():
 # extract_template_names / nation field shape
 # ---------------------------------------------------------------------
 
+
 def test_extract_template_names_single_real_bolt(bolt_params):
     assert parse.extract_template_names(bolt_params["nation"]) == ["JAM"]
 
@@ -114,13 +116,35 @@ def test_extract_template_names_empty_value():
 # normalize_competition_name
 # ---------------------------------------------------------------------
 
+
 def test_extract_medal_years_real_bolt(bolt_params):
     years = parse.extract_medal_years(bolt_params["medaillen"])
     assert years == [
-        2008, 2008, 2012, 2012, 2012, 2016, 2016, 2016,
-        2007, 2007, 2009, 2009, 2009, 2011, 2011, 2013, 2013, 2013,
-        2015, 2015, 2015, 2017,
-        2002, 2002, 2002,
+        2008,
+        2008,
+        2012,
+        2012,
+        2012,
+        2016,
+        2016,
+        2016,
+        2007,
+        2007,
+        2009,
+        2009,
+        2009,
+        2011,
+        2011,
+        2013,
+        2013,
+        2013,
+        2015,
+        2015,
+        2015,
+        2017,
+        2002,
+        2002,
+        2002,
         2003,
         2014,
         2015,
@@ -153,12 +177,23 @@ def test_extract_medal_years_empty_value():
     assert parse.extract_medal_years("") == []
 
 
-@pytest.mark.parametrize("label_a,label_b,expected_key", [
-    ("Leichtathletik-EM", "Europameisterschaften", "europameisterschaften"),
-    ("Leichtathletik-Hallen-WM", "Hallenweltmeisterschaften", "hallenweltmeisterschaften"),
-    ("Olympia", "Olympische Spiele", "olympischespiele"),
-    ("Leichtathletik-Junioren-WM", "Juniorenweltmeisterschaften", "u20weltmeisterschaften"),
-])
+@pytest.mark.parametrize(
+    "label_a,label_b,expected_key",
+    [
+        ("Leichtathletik-EM", "Europameisterschaften", "europameisterschaften"),
+        (
+            "Leichtathletik-Hallen-WM",
+            "Hallenweltmeisterschaften",
+            "hallenweltmeisterschaften",
+        ),
+        ("Olympia", "Olympische Spiele", "olympischespiele"),
+        (
+            "Leichtathletik-Junioren-WM",
+            "Juniorenweltmeisterschaften",
+            "u20weltmeisterschaften",
+        ),
+    ],
+)
 def test_normalize_competition_name_matches_across_naming_conventions(
     label_a, label_b, expected_key
 ):
@@ -173,20 +208,32 @@ def test_normalize_competition_name_empty():
 def test_medal_counts_by_category_real_bolt(bolt_params):
     counts = parse.medal_counts_by_category(bolt_params["medaillen"])
     assert counts["olympischespiele"] == {
-        "label": "Olympia", "gold": 8, "silber": 0, "bronze": 0,
+        "label": "Olympia",
+        "gold": 8,
+        "silber": 0,
+        "bronze": 0,
     }
     assert counts["weltmeisterschaften"] == {
-        "label": "Leichtathletik-WM", "gold": 11, "silber": 2, "bronze": 1,
+        "label": "Leichtathletik-WM",
+        "gold": 11,
+        "silber": 2,
+        "bronze": 1,
     }
 
 
 def test_medal_totals_by_category_real_bolt(bolt_params):
     totals = parse.medal_totals_by_category(bolt_params["Medaillenspiegel"])
     assert totals["olympischespiele"] == {
-        "label": "Olympische Spiele", "gold": 8, "silber": 0, "bronze": 0,
+        "label": "Olympische Spiele",
+        "gold": 8,
+        "silber": 0,
+        "bronze": 0,
     }
     assert totals["u20weltmeisterschaften"] == {
-        "label": "Juniorenweltmeisterschaften", "gold": 1, "silber": 2, "bronze": 0,
+        "label": "Juniorenweltmeisterschaften",
+        "gold": 1,
+        "silber": 2,
+        "bronze": 0,
     }
 
 
@@ -208,7 +255,10 @@ def test_medal_counts_by_category_strips_icon_link_and_medaillenland_call():
     )
     counts = parse.medal_counts_by_category(value)
     assert counts["olympischespiele"] == {
-        "label": "Olympische Spiele", "gold": 1, "silber": 0, "bronze": 0,
+        "label": "Olympische Spiele",
+        "gold": 1,
+        "silber": 0,
+        "bronze": 0,
     }
 
 
@@ -216,8 +266,11 @@ def test_medal_counts_by_category_strips_icon_link_and_medaillenland_call():
 # visible_text
 # ---------------------------------------------------------------------
 
+
 def test_visible_text_resolves_piped_wikilink():
-    text = parse.visible_text("[[Olympische Sommerspiele 2008/Leichtathletik|2008 Peking]]")
+    text = parse.visible_text(
+        "[[Olympische Sommerspiele 2008/Leichtathletik|2008 Peking]]"
+    )
     assert text == "2008 Peking"
 
 
@@ -233,6 +286,7 @@ def test_visible_text_empty():
 # parse_date
 # ---------------------------------------------------------------------
 
+
 def test_parse_date_real_bolt_geburtstag_with_trailing_alter_template(bolt_params):
     # Real value: "21. August 1986 ({{Alter|1986|08|21}} Jahre)" -- the
     # trailing age-computation template must not confuse the parser.
@@ -240,7 +294,9 @@ def test_parse_date_real_bolt_geburtstag_with_trailing_alter_template(bolt_param
 
 
 def test_parse_date_real_drechsler_karriereende_year_only(drechsler_params):
-    assert parse.parse_date(drechsler_params["karriereende"]) == DateParts(2004, None, None)
+    assert parse.parse_date(drechsler_params["karriereende"]) == DateParts(
+        2004, None, None
+    )
 
 
 def test_parse_date_iso():
@@ -272,27 +328,32 @@ def test_parse_date_empty_returns_none():
 # date_range
 # ---------------------------------------------------------------------
 
+
 def test_date_range_full_precision_date():
     assert parse.date_range(DateParts(1986, 8, 21)) == (
-        date(1986, 8, 21), date(1986, 8, 21),
+        date(1986, 8, 21),
+        date(1986, 8, 21),
     )
 
 
 def test_date_range_year_only_spans_whole_year():
     assert parse.date_range(DateParts(2004, None, None)) == (
-        date(2004, 1, 1), date(2004, 12, 31),
+        date(2004, 1, 1),
+        date(2004, 12, 31),
     )
 
 
 def test_date_range_year_month_spans_whole_month():
     assert parse.date_range(DateParts(1986, 2, None)) == (
-        date(1986, 2, 1), date(1986, 2, 28),
+        date(1986, 2, 1),
+        date(1986, 2, 28),
     )
 
 
 def test_date_range_year_month_leap_year_february():
     assert parse.date_range(DateParts(1988, 2, None)) == (
-        date(1988, 2, 1), date(1988, 2, 29),
+        date(1988, 2, 1),
+        date(1988, 2, 29),
     )
 
 

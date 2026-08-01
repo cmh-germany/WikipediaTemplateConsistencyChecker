@@ -155,34 +155,42 @@ def generate_html_report(results, output_path, n_scanned=None):
 
     rows = []
     for finding, title in all_rows:
-        params_html = ", ".join(
-            f"<code>{html.escape(p)}</code>" for p in finding.params
-        ) or "&ndash;"
-        rows.append(_ROW_TEMPLATE.format(
-            severity=html.escape(finding.severity),
-            severity_rank=SEVERITY_ORDER[finding.severity],
-            color=SEVERITY_COLORS.get(finding.severity, "#999"),
-            rule_id=html.escape(finding.rule_id),
-            rule_title=html.escape(finding.title),
-            rule_sort=html.escape(finding.title.lower()),
-            url=ARTICLE_URL.format(html.escape(title.replace(" ", "_"))),
-            title=html.escape(title),
-            article_sort=html.escape(title.lower()),
-            params_html=params_html,
-            params_sort=html.escape(", ".join(finding.params).lower()),
-            message=html.escape(finding.message),
-            message_sort=html.escape(finding.message.lower()),
-        ))
+        params_html = (
+            ", ".join(f"<code>{html.escape(p)}</code>" for p in finding.params)
+            or "&ndash;"
+        )
+        rows.append(
+            _ROW_TEMPLATE.format(
+                severity=html.escape(finding.severity),
+                severity_rank=SEVERITY_ORDER[finding.severity],
+                color=SEVERITY_COLORS.get(finding.severity, "#999"),
+                rule_id=html.escape(finding.rule_id),
+                rule_title=html.escape(finding.title),
+                rule_sort=html.escape(finding.title.lower()),
+                url=ARTICLE_URL.format(html.escape(title.replace(" ", "_"))),
+                title=html.escape(title),
+                article_sort=html.escape(title.lower()),
+                params_html=params_html,
+                params_sort=html.escape(", ".join(finding.params).lower()),
+                message=html.escape(finding.message),
+                message_sort=html.escape(finding.message.lower()),
+            )
+        )
 
     scanned_items = "\n".join(
         f'<li><a href="{ARTICLE_URL.format(html.escape(t.replace(" ", "_")))}" '
         f'target="_blank" rel="noopener">{html.escape(t)}</a>'
-        + (f' <span class="n-findings">({len(findings)} finding(s))</span>' if findings else "")
+        + (
+            f' <span class="n-findings">({len(findings)} finding(s))</span>'
+            if findings
+            else ""
+        )
         + "</li>"
         for t, findings in sorted(results.items())
     )
     scanned_section = _SCANNED_SECTION_TEMPLATE.format(
-        n_scanned=len(results), items=scanned_items,
+        n_scanned=len(results),
+        items=scanned_items,
     )
 
     filter_checkboxes = "\n".join(

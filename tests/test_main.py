@@ -23,6 +23,7 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 # _extract_title_from_input
 # ---------------------------------------------------------------------
 
+
 def test_extract_title_from_https_url():
     url = "https://de.wikipedia.org/wiki/Usain_Bolt"
     assert main._extract_title_from_input(url) == "Usain Bolt"
@@ -35,7 +36,9 @@ def test_extract_title_from_http_url():
 
 def test_extract_title_from_url_with_multiple_underscores():
     url = "https://de.wikipedia.org/wiki/Leichtathletik-Weltmeisterschaften_2019"
-    assert main._extract_title_from_input(url) == "Leichtathletik-Weltmeisterschaften 2019"
+    assert (
+        main._extract_title_from_input(url) == "Leichtathletik-Weltmeisterschaften 2019"
+    )
 
 
 def test_extract_title_from_plain_title_is_passthrough():
@@ -46,6 +49,7 @@ def test_extract_title_from_plain_title_is_passthrough():
 # _print_findings
 # ---------------------------------------------------------------------
 
+
 def test_print_findings_empty(capsys):
     main._print_findings("Test Article", [])
     out = capsys.readouterr().out
@@ -55,6 +59,7 @@ def test_print_findings_empty(capsys):
 
 def test_print_findings_lists_severity_rule_and_message(capsys):
     from rules import Finding
+
     finding = Finding("some_rule", "high", "Something is wrong", params=["x"])
     main._print_findings("Test Article", [finding])
     out = capsys.readouterr().out
@@ -66,6 +71,7 @@ def test_print_findings_lists_severity_rule_and_message(capsys):
 # ---------------------------------------------------------------------
 # --version
 # ---------------------------------------------------------------------
+
 
 def test_version_flag_prints_version_and_exits_0(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["main.py", "--version"])
@@ -87,6 +93,7 @@ def test_version_flag_does_not_require_scan_or_check(monkeypatch):
 # ---------------------------------------------------------------------
 # Argument parsing / dispatch (main())
 # ---------------------------------------------------------------------
+
 
 def test_scan_and_check_both_missing_is_an_error(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py"])
@@ -156,29 +163,45 @@ def test_scan_invokes_run_scan_with_defaults(monkeypatch):
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
     assert calls == {
-        "limit": None, "output": "report.html",
-        "use_cache": True, "open_output": False,
+        "limit": None,
+        "output": "report.html",
+        "use_cache": True,
+        "open_output": False,
     }
 
 
 def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
-    monkeypatch.setattr(sys, "argv", [
-        "main.py", "--scan", "--limit", "50", "--output", "athletes.html",
-        "--no-cache", "--open",
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--scan",
+            "--limit",
+            "50",
+            "--output",
+            "athletes.html",
+            "--no-cache",
+            "--open",
+        ],
+    )
     calls = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
     assert calls == {
-        "limit": 50, "output": "athletes.html",
-        "use_cache": False, "open_output": True,
+        "limit": 50,
+        "output": "athletes.html",
+        "use_cache": False,
+        "open_output": True,
     }
 
 
 def test_check_invokes_run_check_with_target(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", "Usain Bolt"])
     calls = {}
-    monkeypatch.setattr(main, "run_check", lambda target: calls.update(target=target) or 0)
+    monkeypatch.setattr(
+        main, "run_check", lambda target: calls.update(target=target) or 0
+    )
     main.main()
     assert calls["target"] == "Usain Bolt"
 
@@ -189,7 +212,9 @@ def test_check_passes_target_through_unmodified_url(monkeypatch):
     url = "https://de.wikipedia.org/wiki/Usain_Bolt"
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", url])
     calls = {}
-    monkeypatch.setattr(main, "run_check", lambda target: calls.update(target=target) or 0)
+    monkeypatch.setattr(
+        main, "run_check", lambda target: calls.update(target=target) or 0
+    )
     main.main()
     assert calls["target"] == url
 
@@ -198,10 +223,13 @@ def test_check_passes_target_through_unmodified_url(monkeypatch):
 # run_check: local file / article title / URL / not-found / no-infobox
 # ---------------------------------------------------------------------
 
+
 def test_run_check_local_wikitext_file(monkeypatch, capsys):
     # Real fixture, but nation='{{JAM}}' would otherwise trigger a real
     # network call to check "Vorlage:JAM" -- mock it out.
-    monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {t: True for t in titles})
+    monkeypatch.setattr(
+        main.fetch, "templates_exist", lambda session, titles: {t: True for t in titles}
+    )
     path = os.path.join(FIXTURES_DIR, "usain_bolt.wikitext")
 
     result = main.run_check(path)
@@ -230,7 +258,9 @@ def test_run_check_resolves_article_url_to_title_before_fetching(monkeypatch):
 def test_run_check_article_not_found_returns_1_and_prints_message(monkeypatch, capsys):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
     monkeypatch.setattr(
-        main.fetch, "fetch_pages_content_and_categories", lambda session, titles: {},
+        main.fetch,
+        "fetch_pages_content_and_categories",
+        lambda session, titles: {},
     )
 
     result = main.run_check("Nonexistent Article XYZ")
@@ -242,8 +272,11 @@ def test_run_check_article_not_found_returns_1_and_prints_message(monkeypatch, c
 def test_run_check_no_infobox_found_returns_1_and_prints_message(monkeypatch, capsys):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
     monkeypatch.setattr(
-        main.fetch, "fetch_pages_content_and_categories",
-        lambda session, titles: {titles[0]: {"wikitext": "no infobox here", "categories": []}},
+        main.fetch,
+        "fetch_pages_content_and_categories",
+        lambda session, titles: {
+            titles[0]: {"wikitext": "no infobox here", "categories": []}
+        },
     )
 
     result = main.run_check("Some Random Article")
@@ -290,6 +323,7 @@ def test_run_check_local_file_unreadable_returns_1(monkeypatch, capsys, tmp_path
 # --output validation and report-write failure handling
 # ---------------------------------------------------------------------
 
+
 def test_scan_rejects_output_path_in_nonexistent_directory(monkeypatch, tmp_path):
     bad_output = tmp_path / "no_such_subdir" / "report.html"
     monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--output", str(bad_output)])
@@ -323,11 +357,16 @@ def test_scan_accepts_output_path_in_existing_writable_directory(monkeypatch, tm
     assert calls["output"] == str(output)
 
 
-def test_run_scan_report_write_failure_returns_1_instead_of_crashing(monkeypatch, capsys):
+def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
+    monkeypatch, capsys
+):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
-    monkeypatch.setattr(main.fetch, "list_pages_using_template", lambda session, limit=None: [])
     monkeypatch.setattr(
-        main.fetch, "fetch_all_with_cache",
+        main.fetch, "list_pages_using_template", lambda session, limit=None: []
+    )
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_all_with_cache",
         lambda session, titles, use_cache=True: {},
     )
     monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})

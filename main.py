@@ -84,9 +84,11 @@ def run_check(target, session=None):
             with open(target, "r", encoding="utf-8") as fh:
                 wikitext = fh.read()
         except UnicodeDecodeError:
-            print(f"Could not read '{target}': not valid UTF-8 text -- "
-                  "save the draft as plain UTF-8 text, not .docx or "
-                  "another encoding (see README).")
+            print(
+                f"Could not read '{target}': not valid UTF-8 text -- "
+                "save the draft as plain UTF-8 text, not .docx or "
+                "another encoding (see README)."
+            )
             return 1
         except OSError as e:
             print(f"Could not read '{target}': {e.strerror or e}.")
@@ -97,8 +99,9 @@ def run_check(target, session=None):
         title = _extract_title_from_input(target)
         data = fetch.fetch_pages_content_and_categories(session, [title])
         if title not in data:
-            print(f"Article '{title}' not found or has no retrievable "
-                  "wikitext revision.")
+            print(
+                f"Article '{title}' not found or has no retrievable wikitext revision."
+            )
             return 1
         wikitext = data[title]["wikitext"]
         categories = data[title]["categories"]
@@ -121,7 +124,9 @@ def run_check(target, session=None):
         discipline_exists = fetch.templates_exist(session, [discipline])
 
     findings = rules.run_all_checks(
-        params, categories=categories, nation_exists=nation_exists,
+        params,
+        categories=categories,
+        nation_exists=nation_exists,
         discipline_exists=discipline_exists,
     )
     _print_findings(title, findings)
@@ -164,7 +169,9 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
     results = {}
     for title, (params, categories) in parsed.items():
         results[title] = rules.run_all_checks(
-            params, categories=categories, nation_exists=nation_exists,
+            params,
+            categories=categories,
+            nation_exists=nation_exists,
             discipline_exists=discipline_exists,
         )
 
@@ -175,8 +182,10 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
         return 1
     n_with_findings = sum(1 for f in results.values() if f)
     output_path = os.path.abspath(output)
-    print(f"\nDone. {n_with_findings} of {len(parsed)} articles have "
-          f"findings. Report: {output_path}")
+    print(
+        f"\nDone. {n_with_findings} of {len(parsed)} articles have "
+        f"findings. Report: {output_path}"
+    )
     if open_output:
         webbrowser.open(f"file://{output_path}")
     return 0
@@ -187,33 +196,42 @@ def main():
         description="Consistency checker for Vorlage:Infobox Leichtathlet",
     )
     parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "--scan", action="store_true",
+        "--scan",
+        action="store_true",
         help="Check all articles that embed the template via the Wikipedia API",
     )
     group.add_argument(
-        "--check", metavar="TARGET",
+        "--check",
+        metavar="TARGET",
         help="Check a single article (title or URL) or a local wikitext file",
     )
     parser.add_argument(
-        "--limit", type=_positive_int, default=None,
+        "--limit",
+        type=_positive_int,
+        default=None,
         help="Only scan the first N articles (for testing)",
     )
     parser.add_argument(
-        "--output", default="report.html",
+        "--output",
+        default="report.html",
         help="Path for the HTML report when using --scan (default: report.html)",
     )
     parser.add_argument(
-        "--no-cache", action="store_true",
+        "--no-cache",
+        action="store_true",
         help="Ignore the local cache (cache.json) and reload everything",
     )
     parser.add_argument(
-        "--open", action="store_true",
+        "--open",
+        action="store_true",
         help="Open the generated HTML report in the default browser "
-             "after the scan finishes (--scan only)",
+        "after the scan finishes (--scan only)",
     )
     args = parser.parse_args()
 
@@ -232,7 +250,9 @@ def main():
         parser.error(f"--output: {output_error}")
 
     return run_scan(
-        limit=args.limit, output=args.output, use_cache=not args.no_cache,
+        limit=args.limit,
+        output=args.output,
+        use_cache=not args.no_cache,
         open_output=args.open,
     )
 

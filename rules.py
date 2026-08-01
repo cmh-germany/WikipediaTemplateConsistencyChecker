@@ -10,8 +10,12 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from parse import (
-    parse_date, date_range, extract_template_names, extract_medal_years,
-    medal_counts_by_category, medal_totals_by_category,
+    parse_date,
+    date_range,
+    extract_template_names,
+    extract_medal_years,
+    medal_counts_by_category,
+    medal_totals_by_category,
 )
 
 VERY_HIGH = "very high"
@@ -112,28 +116,35 @@ def _today(ctx):
 # Status / death date
 # ---------------------------------------------------------------------
 
+
 def check_death_date_with_non_deceased_status(ctx):
     status = ctx.get("status").lower()
     if ctx.get("sterbedatum") and status and status != "v":
-        return [Finding(
-            "death_date_with_non_deceased_status", HIGH,
-            f"Death date (sterbedatum) is given, but status='{ctx.get('status')}' "
-            "(not 'v'). Vorlage:Status Sportler will still render "
-            "'verstorben' automatically, but the status field itself is "
-            "stale and should be updated to 'v'.",
-            params=["sterbedatum", "status"],
-        )]
+        return [
+            Finding(
+                "death_date_with_non_deceased_status",
+                HIGH,
+                f"Death date (sterbedatum) is given, but status='{ctx.get('status')}' "
+                "(not 'v'). Vorlage:Status Sportler will still render "
+                "'verstorben' automatically, but the status field itself is "
+                "stale and should be updated to 'v'.",
+                params=["sterbedatum", "status"],
+            )
+        ]
     return []
 
 
 def check_status_deceased_without_death_date(ctx):
     status = ctx.get("status").lower()
     if status == "v" and not ctx.get("sterbedatum"):
-        return [Finding(
-            "status_deceased_without_death_date", VERY_HIGH,
-            "status=v (deceased), but no death date (sterbedatum) is given.",
-            params=["status", "sterbedatum"],
-        )]
+        return [
+            Finding(
+                "status_deceased_without_death_date",
+                VERY_HIGH,
+                "status=v (deceased), but no death date (sterbedatum) is given.",
+                params=["status", "sterbedatum"],
+            )
+        ]
     return []
 
 
@@ -145,35 +156,42 @@ def check_invalid_status_code(ctx):
     if normalized in VALID_STATUS_CODES:
         return []
     if normalized in STATUS_FULL_WORDS:
-        return [Finding(
-            "status_code_spelled_out", LOW,
-            f"status='{status}' spells out the German word instead of "
-            f"using the documented single-letter code "
-            f"('{STATUS_FULL_WORDS[normalized]}'). Renders correctly by "
-            "coincidence (Vorlage:Status Sportler falls back to "
-            "displaying the raw value), but should be normalized.",
+        return [
+            Finding(
+                "status_code_spelled_out",
+                LOW,
+                f"status='{status}' spells out the German word instead of "
+                f"using the documented single-letter code "
+                f"('{STATUS_FULL_WORDS[normalized]}'). Renders correctly by "
+                "coincidence (Vorlage:Status Sportler falls back to "
+                "displaying the raw value), but should be normalized.",
+                params=["status"],
+            )
+        ]
+    return [
+        Finding(
+            "invalid_status_code",
+            VERY_HIGH,
+            f"status='{status}' is not a valid code (allowed: a, g, n, p, u, "
+            "v, z) and doesn't match a known spelled-out status word either "
+            "-- the infobox will likely display this raw text as-is.",
             params=["status"],
-        )]
-    return [Finding(
-        "invalid_status_code", VERY_HIGH,
-        f"status='{status}' is not a valid code (allowed: a, g, n, p, u, "
-        "v, z) and doesn't match a known spelled-out status word either "
-        "-- the infobox will likely display this raw text as-is.",
-        params=["status"],
-    )]
+        )
+    ]
 
 
 def check_deceased_but_living_person_category(ctx):
     status = ctx.get("status").lower()
-    if status == "v" and any(
-        "Lebende Personen" in c for c in ctx.categories
-    ):
-        return [Finding(
-            "deceased_but_living_person_category", HIGH,
-            "status=v (deceased), but the article is still categorized "
-            "under 'Kategorie:Lebende Personen' (living people).",
-            params=["status"],
-        )]
+    if status == "v" and any("Lebende Personen" in c for c in ctx.categories):
+        return [
+            Finding(
+                "deceased_but_living_person_category",
+                HIGH,
+                "status=v (deceased), but the article is still categorized "
+                "under 'Kategorie:Lebende Personen' (living people).",
+                params=["status"],
+            )
+        ]
     return []
 
 
@@ -181,38 +199,48 @@ def check_deceased_but_living_person_category(ctx):
 # Date comparisons
 # ---------------------------------------------------------------------
 
+
 def check_death_date_before_birth_date(ctx):
     birth = date_range(parse_date(ctx.get("geburtstag")))
     death = date_range(parse_date(ctx.get("sterbedatum")))
     if birth and death and death[1] < birth[0]:
-        return [Finding(
-            "death_date_before_birth_date", VERY_HIGH,
-            f"Death date ({ctx.get('sterbedatum')}) is before the "
-            f"birth date ({ctx.get('geburtstag')}).",
-            params=["geburtstag", "sterbedatum"],
-        )]
+        return [
+            Finding(
+                "death_date_before_birth_date",
+                VERY_HIGH,
+                f"Death date ({ctx.get('sterbedatum')}) is before the "
+                f"birth date ({ctx.get('geburtstag')}).",
+                params=["geburtstag", "sterbedatum"],
+            )
+        ]
     return []
 
 
 def check_birth_date_in_future(ctx):
     birth = date_range(parse_date(ctx.get("geburtstag")))
     if birth and birth[0] > _today(ctx):
-        return [Finding(
-            "birth_date_in_future", VERY_HIGH,
-            f"Birth date ({ctx.get('geburtstag')}) is in the future.",
-            params=["geburtstag"],
-        )]
+        return [
+            Finding(
+                "birth_date_in_future",
+                VERY_HIGH,
+                f"Birth date ({ctx.get('geburtstag')}) is in the future.",
+                params=["geburtstag"],
+            )
+        ]
     return []
 
 
 def check_death_date_in_future(ctx):
     death = date_range(parse_date(ctx.get("sterbedatum")))
     if death and death[0] > _today(ctx):
-        return [Finding(
-            "death_date_in_future", VERY_HIGH,
-            f"Death date ({ctx.get('sterbedatum')}) is in the future.",
-            params=["sterbedatum"],
-        )]
+        return [
+            Finding(
+                "death_date_in_future",
+                VERY_HIGH,
+                f"Death date ({ctx.get('sterbedatum')}) is in the future.",
+                params=["sterbedatum"],
+            )
+        ]
     return []
 
 
@@ -220,23 +248,29 @@ def check_career_end_before_birth_date(ctx):
     birth = date_range(parse_date(ctx.get("geburtstag")))
     end = date_range(parse_date(ctx.get("karriereende")))
     if birth and end and end[1] < birth[0]:
-        return [Finding(
-            "career_end_before_birth_date", VERY_HIGH,
-            f"Career end ({ctx.get('karriereende')}) is before the "
-            f"birth date ({ctx.get('geburtstag')}).",
-            params=["geburtstag", "karriereende"],
-        )]
+        return [
+            Finding(
+                "career_end_before_birth_date",
+                VERY_HIGH,
+                f"Career end ({ctx.get('karriereende')}) is before the "
+                f"birth date ({ctx.get('geburtstag')}).",
+                params=["geburtstag", "karriereende"],
+            )
+        ]
     return []
 
 
 def check_career_end_despite_active(ctx):
     status = ctx.get("status").lower()
     if status == "a" and ctx.get("karriereende"):
-        return [Finding(
-            "career_end_despite_active", HIGH,
-            "Career end date is given, but status=a (active).",
-            params=["karriereende", "status"],
-        )]
+        return [
+            Finding(
+                "career_end_despite_active",
+                HIGH,
+                "Career end date is given, but status=a (active).",
+                params=["karriereende", "status"],
+            )
+        ]
     return []
 
 
@@ -250,12 +284,15 @@ def check_implausible_age_at_death(ctx):
     if max_age < 0:
         return []  # already reported by check_death_date_before_birth_date
     if min_age > 115 or max_age < 10:
-        return [Finding(
-            "implausible_age_at_death", HIGH,
-            f"Computed age at death is implausible "
-            f"(between {min_age:.0f} and {max_age:.0f} years).",
-            params=["geburtstag", "sterbedatum"],
-        )]
+        return [
+            Finding(
+                "implausible_age_at_death",
+                HIGH,
+                f"Computed age at death is implausible "
+                f"(between {min_age:.0f} and {max_age:.0f} years).",
+                params=["geburtstag", "sterbedatum"],
+            )
+        ]
     return []
 
 
@@ -265,26 +302,33 @@ def check_national_squad_before_birth(ctx):
     if not (birth and squad):
         return []
     if squad[1] < birth[0]:
-        return [Finding(
-            "national_squad_before_birth", VERY_HIGH,
-            f"National squad year ({ctx.get('nationalkader')}) is "
-            f"before the birth year ({ctx.get('geburtstag')}).",
-            params=["geburtstag", "nationalkader"],
-        )]
+        return [
+            Finding(
+                "national_squad_before_birth",
+                VERY_HIGH,
+                f"National squad year ({ctx.get('nationalkader')}) is "
+                f"before the birth year ({ctx.get('geburtstag')}).",
+                params=["geburtstag", "nationalkader"],
+            )
+        ]
     age_at_squad = (squad[0] - birth[1]).days / 365.25
     if 0 <= age_at_squad < 10:
-        return [Finding(
-            "national_squad_implausibly_young", MEDIUM,
-            f"National squad membership starting at approx. age "
-            f"{age_at_squad:.0f} seems implausibly young.",
-            params=["geburtstag", "nationalkader"],
-        )]
+        return [
+            Finding(
+                "national_squad_implausibly_young",
+                MEDIUM,
+                f"National squad membership starting at approx. age "
+                f"{age_at_squad:.0f} seems implausibly young.",
+                params=["geburtstag", "nationalkader"],
+            )
+        ]
     return []
 
 
 # ---------------------------------------------------------------------
 # Plausibility of numeric values
 # ---------------------------------------------------------------------
+
 
 def check_height_weight_plausibility(ctx):
     findings = []
@@ -296,12 +340,15 @@ def check_height_weight_plausibility(ctx):
         if not raw:
             continue
         if "," in raw:
-            findings.append(Finding(
-                f"{label}_comma_format", MEDIUM,
-                f"{field_name}='{raw}' contains a comma -- per "
-                "documentation, numbers should be given without a comma.",
-                params=[field_name],
-            ))
+            findings.append(
+                Finding(
+                    f"{label}_comma_format",
+                    MEDIUM,
+                    f"{field_name}='{raw}' contains a comma -- per "
+                    "documentation, numbers should be given without a comma.",
+                    params=[field_name],
+                )
+            )
             continue
         # Only take the leading run of digits (e.g. "166<ref>...</ref>"
         # -> 166). Stripping all non-digits from the whole string would
@@ -309,20 +356,26 @@ def check_height_weight_plausibility(ctx):
         # citation URL, and silently produce a nonsense number.
         m = re.match(r"\s*(\d+)", raw)
         if not m:
-            findings.append(Finding(
-                f"{label}_not_numeric", LOW,
-                f"{field_name}='{raw}' is not recognizable as a plain number.",
-                params=[field_name],
-            ))
+            findings.append(
+                Finding(
+                    f"{label}_not_numeric",
+                    LOW,
+                    f"{field_name}='{raw}' is not recognizable as a plain number.",
+                    params=[field_name],
+                )
+            )
             continue
         value = int(m.group(1))
         if not (lo <= value <= hi):
-            findings.append(Finding(
-                f"{label}_implausible", MEDIUM,
-                f"{field_name}={value} {unit} is outside the plausible "
-                f"range ({lo}-{hi} {unit}).",
-                params=[field_name],
-            ))
+            findings.append(
+                Finding(
+                    f"{label}_implausible",
+                    MEDIUM,
+                    f"{field_name}={value} {unit} is outside the plausible "
+                    f"range ({lo}-{hi} {unit}).",
+                    params=[field_name],
+                )
+            )
     return findings
 
 
@@ -362,13 +415,16 @@ def check_nation_code(ctx):
 
     codes = nation_codes_to_check(nation)
     if not codes:
-        return [Finding(
-            "nation_nonstandard_format", LOW,
-            f"nation='{nation}' is neither a {{{{XXX}}}} flag "
-            "template call nor a bare ISO-3166-1 alpha-3 code as "
-            "documented -- it's plain text or a wikilink.",
-            params=["nation"],
-        )]
+        return [
+            Finding(
+                "nation_nonstandard_format",
+                LOW,
+                f"nation='{nation}' is neither a {{{{XXX}}}} flag "
+                "template call nor a bare ISO-3166-1 alpha-3 code as "
+                "documented -- it's plain text or a wikilink.",
+                params=["nation"],
+            )
+        ]
 
     if ctx.nation_exists is None:
         return []
@@ -376,13 +432,16 @@ def check_nation_code(ctx):
     for code in codes:
         template_title = f"Vorlage:{code}"
         if ctx.nation_exists.get(template_title) is False:
-            findings.append(Finding(
-                "nation_code_unknown", MEDIUM,
-                f"nation='{nation}' -- 'Vorlage:{code}' does not exist, "
-                "the infobox will likely display the raw code instead of "
-                "a flag/country name.",
-                params=["nation"],
-            ))
+            findings.append(
+                Finding(
+                    "nation_code_unknown",
+                    MEDIUM,
+                    f"nation='{nation}' -- 'Vorlage:{code}' does not exist, "
+                    "the infobox will likely display the raw code instead of "
+                    "a flag/country name.",
+                    params=["nation"],
+                )
+            )
     return findings
 
 
@@ -405,13 +464,16 @@ def check_discipline_link(ctx):
     if not disziplin or ctx.discipline_exists is None:
         return []
     if ctx.discipline_exists.get(disziplin) is False:
-        return [Finding(
-            "discipline_link_unknown", LOW,
-            f"disziplin='{disziplin}' does not match an existing "
-            "article, the infobox will show it as plain unlinked text "
-            "-- possibly a typo.",
-            params=["disziplin"],
-        )]
+        return [
+            Finding(
+                "discipline_link_unknown",
+                LOW,
+                f"disziplin='{disziplin}' does not match an existing "
+                "article, the infobox will show it as plain unlinked text "
+                "-- possibly a typo.",
+                params=["disziplin"],
+            )
+        ]
     return []
 
 
@@ -455,13 +517,16 @@ def check_medal_count_mismatch(ctx):
         ]
         if not diffs:
             continue
-        findings.append(Finding(
-            "medal_count_mismatch", HIGH,
-            f"'{declared_entry['label']}': medal count mismatch between "
-            f"'medaillen' and 'Medaillenspiegel' ({', '.join(diffs)}, "
-            "individual medals listed vs. declared total).",
-            params=["medaillen", "Medaillenspiegel"],
-        ))
+        findings.append(
+            Finding(
+                "medal_count_mismatch",
+                HIGH,
+                f"'{declared_entry['label']}': medal count mismatch between "
+                f"'medaillen' and 'Medaillenspiegel' ({', '.join(diffs)}, "
+                "individual medals listed vs. declared total).",
+                params=["medaillen", "Medaillenspiegel"],
+            )
+        )
     return findings
 
 
@@ -475,20 +540,26 @@ def check_medal_year_before_birth(ctx):
     earliest_medal = min(years)
     age_at_first_medal = earliest_medal - birth[1].year
     if age_at_first_medal < 0:
-        return [Finding(
-            "medal_before_birth", HIGH,
-            f"Earliest year found in the medals section "
-            f"({earliest_medal}) is before the birth year.",
-            params=["geburtstag", "medaillen"],
-        )]
+        return [
+            Finding(
+                "medal_before_birth",
+                HIGH,
+                f"Earliest year found in the medals section "
+                f"({earliest_medal}) is before the birth year.",
+                params=["geburtstag", "medaillen"],
+            )
+        ]
     if age_at_first_medal < 10:
-        return [Finding(
-            "medal_implausibly_young", MEDIUM,
-            f"Earliest year found in the medals section "
-            f"({earliest_medal}) implies an age of only about "
-            f"{age_at_first_medal} years.",
-            params=["geburtstag", "medaillen"],
-        )]
+        return [
+            Finding(
+                "medal_implausibly_young",
+                MEDIUM,
+                f"Earliest year found in the medals section "
+                f"({earliest_medal}) implies an age of only about "
+                f"{age_at_first_medal} years.",
+                params=["geburtstag", "medaillen"],
+            )
+        ]
     return []
 
 
@@ -496,14 +567,18 @@ def check_medal_year_before_birth(ctx):
 # Completeness / recency (low priority)
 # ---------------------------------------------------------------------
 
+
 def check_missing_birthplace(ctx):
     if not ctx.get("geburtsort") and not ctx.get("geburtsland"):
-        return [Finding(
-            "missing_birthplace", LOW,
-            "Neither birthplace (geburtsort) nor birth country "
-            "(geburtsland) is given.",
-            params=["geburtsort", "geburtsland"],
-        )]
+        return [
+            Finding(
+                "missing_birthplace",
+                LOW,
+                "Neither birthplace (geburtsort) nor birth country "
+                "(geburtsland) is given.",
+                params=["geburtsort", "geburtsland"],
+            )
+        ]
     return []
 
 
@@ -513,13 +588,16 @@ def check_outdated_update_while_active(ctx):
     if status == "a" and update:
         age_years = (_today(ctx) - update[1]).days / 365.25
         if age_years > 5:
-            return [Finding(
-                "update_outdated", LOW,
-                f"status=a (active), but the last update "
-                f"({ctx.get('update')}) is more than {age_years:.0f} "
-                "years old.",
-                params=["status", "update"],
-            )]
+            return [
+                Finding(
+                    "update_outdated",
+                    LOW,
+                    f"status=a (active), but the last update "
+                    f"({ctx.get('update')}) is more than {age_years:.0f} "
+                    "years old.",
+                    params=["status", "update"],
+                )
+            ]
     return []
 
 
@@ -545,8 +623,9 @@ ALL_RULES = [
 ]
 
 
-def run_all_checks(params, categories=None, today=None, nation_exists=None,
-                    discipline_exists=None):
+def run_all_checks(
+    params, categories=None, today=None, nation_exists=None, discipline_exists=None
+):
     ctx = Context(
         params=params,
         categories=categories or [],

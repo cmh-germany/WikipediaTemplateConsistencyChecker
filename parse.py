@@ -13,9 +13,19 @@ TEMPLATE_NAMES = {"infobox leichtathlet"}
 
 # German month names, as they appear in the infobox's date fields.
 MONTHS = {
-    "januar": 1, "februar": 2, "märz": 3, "maerz": 3, "april": 4, "mai": 5,
-    "juni": 6, "juli": 7, "august": 8, "september": 9, "oktober": 10,
-    "november": 11, "dezember": 12,
+    "januar": 1,
+    "februar": 2,
+    "märz": 3,
+    "maerz": 3,
+    "april": 4,
+    "mai": 5,
+    "juni": 6,
+    "juli": 7,
+    "august": 8,
+    "september": 9,
+    "oktober": 10,
+    "november": 11,
+    "dezember": 12,
 }
 
 # Year is required, month/day may be unknown (None).
@@ -272,9 +282,7 @@ def visible_text(value):
 
 
 _ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
-_GERMAN_DATE_RE = re.compile(
-    r"(\d{1,2})\.\s*([A-Za-zäöüÄÖÜß]+)\s+(\d{3,4})"
-)
+_GERMAN_DATE_RE = re.compile(r"(\d{1,2})\.\s*([A-Za-zäöüÄÖÜß]+)\s+(\d{3,4})")
 # Leading year only -- deliberately not anchored at the end, since
 # fields like nationalkader often trail off with extra context, e.g.
 # "2002 {{SVN}}" (switched national team) or "1955-1972" (start-end
@@ -360,7 +368,9 @@ def date_range(parts):
         if late_month == 12:
             late_day = 31
         else:
-            late_day = (date(parts.year, late_month + 1, 1) - date(parts.year, late_month, 1)).days
+            late_day = (
+                date(parts.year, late_month + 1, 1) - date(parts.year, late_month, 1)
+            ).days
 
     try:
         late = date(parts.year, late_month, late_day)

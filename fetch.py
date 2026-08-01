@@ -120,7 +120,9 @@ def list_pages_using_template(session, template_name=TEMPLATE_NAME, limit=None):
         "einamespace": 0,
         "eilimit": "max" if not limit else min(limit, 500),
     }
-    stop_when = (lambda merged: len(merged.get("embeddedin", [])) >= limit) if limit else None
+    stop_when = (
+        (lambda merged: len(merged.get("embeddedin", [])) >= limit) if limit else None
+    )
     query = _api_query(session, params, stop_when=stop_when)
     titles = [p["title"] for p in query.get("embeddedin", [])]
     if limit:
