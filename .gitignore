@@ -5,3 +5,5 @@ report.html
 .venv/
 .pytest_cache/
 .coverage
+.vscode/settings.json
+TODO.md
