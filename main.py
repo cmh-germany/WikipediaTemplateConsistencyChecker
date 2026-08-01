@@ -1,4 +1,4 @@
-"""CLI for the Infobox Leichtathlet consistency checker.
+"""CLI for the Infobox template consistency checker.
 
 Two modes:
   python main.py --scan [--limit N] [--output report.html] [--no-cache]
@@ -193,12 +193,12 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Consistency checker for Vorlage:Infobox Leichtathlet",
+        description="Consistency checker for Wikipedia Vorlage:Infobox templates",
     )
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {__version__}",
+        version=f"WikipediaTemplateConsistencyChecker {__version__}",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
