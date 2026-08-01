@@ -17,8 +17,8 @@ import webbrowser
 
 import fetch
 import parse
-import rules
 import report
+import rules
 
 __version__ = "0.1"
 
@@ -81,7 +81,7 @@ def run_check(target, session=None):
 
     if os.path.isfile(target):
         try:
-            with open(target, "r", encoding="utf-8") as fh:
+            with open(target, encoding="utf-8") as fh:
                 wikitext = fh.read()
         except UnicodeDecodeError:
             print(

@@ -10,12 +10,12 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from parse import (
-    parse_date,
     date_range,
-    extract_template_names,
     extract_medal_years,
+    extract_template_names,
     medal_counts_by_category,
     medal_totals_by_category,
+    parse_date,
 )
 
 VERY_HIGH = "very high"

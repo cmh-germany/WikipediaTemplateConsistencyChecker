@@ -180,7 +180,7 @@ def templates_exist(session, template_titles):
 def load_cache():
     if not os.path.exists(CACHE_FILE):
         return {}
-    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+    with open(CACHE_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 

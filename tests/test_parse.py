@@ -16,7 +16,6 @@ import pytest
 import parse
 from parse import DateParts
 
-
 # ---------------------------------------------------------------------
 # find_infobox / extract_params / parse_infobox_params
 # ---------------------------------------------------------------------
