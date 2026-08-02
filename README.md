@@ -219,7 +219,10 @@ below. Already fetched articles are cached in `cache.json` so a repeated
 run is faster (bypass the cache with `--no-cache`, e.g. if articles have
 changed since — deleting `cache.json` has the same effect). A collapsible
 list of every scanned article, with its finding count, is always included
-at the bottom of the report, collapsed by default.
+at the bottom of the report, collapsed by default. A summary near the top
+of the report and at the end of the console output shows the total finding
+count broken down by severity, e.g.
+`Total findings: 12 (Very high: 2, High: 3, Medium: 5, Low: 2)`.
 
 A full scan reads roughly 15,000 articles from the Wikipedia API and
 deliberately paces its requests to avoid overloading it, so — especially
@@ -240,6 +243,9 @@ python main.py --check "Usain Bolt"
 python main.py --check https://de.wikipedia.org/wiki/Usain_Bolt
 python main.py --check my_draft.wikitext
 ```
+
+Findings are printed to the console, followed by the same severity
+breakdown as the report (omitted when there are no findings).
 
 The article-title form must match the exact spelling/capitalization of the
 Wikipedia page title; if you're unsure, copying the full URL from your
