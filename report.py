@@ -97,17 +97,12 @@ def generate_html_report(
         items=scanned_items,
     )
 
+    severity_counts = count_by_severity([finding for finding, _ in all_rows])
     filter_checkboxes = "\n".join(
         f'<label><input type="checkbox" value="{sev}" checked> '
-        f'<span class="sev" style="background:{color}">{sev}</span></label>'
+        f'<span class="sev" style="background:{color}">'
+        f"{sev} ({severity_counts[sev]})</span></label>"
         for sev, color in SEVERITY_COLORS.items()
-    )
-
-    severity_counts = count_by_severity([finding for finding, _ in all_rows])
-    severity_summary = "\n".join(
-        f'<span class="sev" style="background:{SEVERITY_COLORS[sev]}">'
-        f"{sev.capitalize()}: {severity_counts[sev]}</span>"
-        for sev in SEVERITY_ORDER
     )
 
     html_out = _TEMPLATE.substitute(
@@ -116,7 +111,6 @@ def generate_html_report(
         n_scanned=n_scanned,
         n_findings=n_findings,
         template_doc_url=TEMPLATE_DOC_URL,
-        severity_summary=severity_summary,
         filter_checkboxes=filter_checkboxes,
         rows="\n".join(rows) if rows else "<tr><td colspan=5>No findings.</td></tr>",
         scanned_section=scanned_section,
