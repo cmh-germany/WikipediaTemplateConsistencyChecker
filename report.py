@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from string import Template
 
+from rules import Finding, count_by_severity
+
 SEVERITY_COLORS = {
     "very high": "#c0392b",
     "high": "#e67e22",
@@ -33,7 +35,11 @@ _ROW_TEMPLATE = _load_template("row.html")
 _SCANNED_SECTION_TEMPLATE = _load_template("scanned_section.html")
 
 
-def generate_html_report(results, output_path, n_scanned=None):
+def generate_html_report(
+    results: dict[str, list[Finding]],
+    output_path: str,
+    n_scanned: int | None = None,
+) -> None:
     """results: dict {article_title: list[Finding]} -- must include
     articles with an empty finding list too (not just the ones with
     findings), so the "scanned articles" section can show everything
@@ -97,12 +103,20 @@ def generate_html_report(results, output_path, n_scanned=None):
         for sev, color in SEVERITY_COLORS.items()
     )
 
+    severity_counts = count_by_severity([finding for finding, _ in all_rows])
+    severity_summary = "\n".join(
+        f'<span class="sev" style="background:{SEVERITY_COLORS[sev]}">'
+        f"{sev.capitalize()}: {severity_counts[sev]}</span>"
+        for sev in SEVERITY_ORDER
+    )
+
     html_out = _TEMPLATE.substitute(
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         n_articles_with_findings=n_articles_with_findings,
         n_scanned=n_scanned,
         n_findings=n_findings,
         template_doc_url=TEMPLATE_DOC_URL,
+        severity_summary=severity_summary,
         filter_checkboxes=filter_checkboxes,
         rows="\n".join(rows) if rows else "<tr><td colspan=5>No findings.</td></tr>",
         scanned_section=scanned_section,
