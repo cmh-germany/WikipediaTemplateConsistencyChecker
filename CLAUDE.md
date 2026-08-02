@@ -18,19 +18,7 @@ German-language.
 
 ## Project Structure
 
-* `fetch.py` — MediaWiki API access (article list, wikitext, categories,
-  template-existence checks), with a local JSON cache (`cache.json`)
-* `parse.py` — extracts infobox parameters from wikitext (`mwparserfromhell`)
-  and parses (possibly incomplete) date values
-* `rules.py` — the rule set; each rule is a standalone `check_*(ctx) ->
-  list[Finding]` function registered in `ALL_RULES`
-* `report.py` — generates the self-contained, sortable HTML report
-* `main.py` — CLI entry point (`argparse`)
-* `tests/` — pytest suite (`test_parse.py`, `test_rules.py`, `test_main.py`,
-  `conftest.py`, `fixtures/`)
-* `requirements.txt` / `requirements-dev.txt` — runtime / development
-  dependencies
-* `pyproject.toml` — ruff and mypy configuration
+See [README.md](README.md#project-structure) for the file layout.
 
 When adding a genuinely new concern (e.g. support for a second infobox
 template), prefer a new module over growing an existing one into a grab-bag.
