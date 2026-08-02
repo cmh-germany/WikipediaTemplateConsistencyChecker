@@ -81,6 +81,44 @@ def test_print_findings_lists_severity_rule_and_message(capsys):
     assert "Something is wrong" in out
 
 
+def test_print_findings_prints_severity_summary(capsys):
+    from rules import Finding
+
+    findings = [
+        Finding("r1", "very high", "m1"),
+        Finding("r2", "high", "m2"),
+        Finding("r3", "low", "m3"),
+    ]
+    main._print_findings("Test Article", findings)
+    out = capsys.readouterr().out
+    assert "Total findings: 3 (Very high: 1, High: 1, Medium: 0, Low: 1)" in out
+
+
+def test_print_findings_no_summary_line_when_empty(capsys):
+    main._print_findings("Test Article", [])
+    out = capsys.readouterr().out
+    assert "Total findings" not in out
+
+
+# ---------------------------------------------------------------------
+# _format_severity_summary
+# ---------------------------------------------------------------------
+
+
+def test_format_severity_summary_matches_issue_example():
+    counts = {"very high": 2, "high": 3, "medium": 5, "low": 2}
+    assert main._format_severity_summary(counts) == (
+        "Total findings: 12 (Very high: 2, High: 3, Medium: 5, Low: 2)"
+    )
+
+
+def test_format_severity_summary_all_zero():
+    counts = {"very high": 0, "high": 0, "medium": 0, "low": 0}
+    assert main._format_severity_summary(counts) == (
+        "Total findings: 0 (Very high: 0, High: 0, Medium: 0, Low: 0)"
+    )
+
+
 # ---------------------------------------------------------------------
 # --version
 # ---------------------------------------------------------------------
@@ -393,3 +431,36 @@ def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
 
     assert result == 1
     assert "Could not write report" in capsys.readouterr().out
+
+
+def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(main.fetch, "get_session", lambda: object())
+    monkeypatch.setattr(
+        main.fetch,
+        "list_pages_using_template",
+        lambda session, limit=None: ["Dead Athlete"],
+    )
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_all_with_cache",
+        lambda session, titles, use_cache=True: {
+            "Dead Athlete": {
+                # status='a' (active) with a death date given -- a
+                # "high" severity contradiction
+                # (death_date_with_non_deceased_status). No birthplace
+                # given either, which also triggers a "low" severity
+                # missing_birthplace finding.
+                "wikitext": (
+                    "{{Infobox Leichtathlet|status=a|sterbedatum=2020-01-01}}"
+                ),
+                "categories": [],
+            }
+        },
+    )
+    monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
+
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "Total findings: 2 (Very high: 0, High: 1, Medium: 0, Low: 1)" in out

@@ -17,7 +17,7 @@ from datetime import date
 
 import pytest
 
-from rules import run_all_checks
+from rules import Finding, count_by_severity, run_all_checks
 
 TODAY = date(2026, 8, 1)
 
@@ -369,3 +369,40 @@ def test_recent_update_real_mihambo_active_no_finding(mihambo_params):
     # (2026-08-01) -- recent, should not be flagged as outdated.
     findings = check(mihambo_params)
     assert "update_outdated" not in finding_ids(findings)
+
+
+# ---------------------------------------------------------------------
+# count_by_severity
+# ---------------------------------------------------------------------
+
+
+def test_count_by_severity_counts_each_severity():
+    findings = [
+        Finding("r1", "very high", "m1"),
+        Finding("r2", "high", "m2"),
+        Finding("r3", "high", "m3"),
+        Finding("r4", "low", "m4"),
+    ]
+    assert count_by_severity(findings) == {
+        "very high": 1,
+        "high": 2,
+        "medium": 0,
+        "low": 1,
+    }
+
+
+def test_count_by_severity_empty_list_returns_all_zero():
+    assert count_by_severity([]) == {
+        "very high": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+    }
+
+
+def test_count_by_severity_result_is_in_severity_order():
+    # dict.fromkeys(SEVERITY_ORDER, ...) preserves SEVERITY_ORDER's
+    # insertion order -- callers (CLI/report summaries) rely on this
+    # to print severities from most to least severe without re-sorting.
+    counts = count_by_severity([Finding("r1", "low", "m1")])
+    assert list(counts) == ["very high", "high", "medium", "low"]
