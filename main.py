@@ -67,6 +67,17 @@ def _check_output_path(path):
     return None
 
 
+def _format_severity_summary(counts: dict[str, int]) -> str:
+    """Formats a counts-by-severity dict (see rules.count_by_severity)
+    as e.g. "Total findings: 12 (Very high: 2, High: 3, Medium: 5,
+    Low: 2)", for both --check and --scan console output."""
+    total = sum(counts.values())
+    breakdown = ", ".join(
+        f"{severity.capitalize()}: {count}" for severity, count in counts.items()
+    )
+    return f"Total findings: {total} ({breakdown})"
+
+
 def _print_findings(title, findings):
     print(f"\n=== {title} ===")
     if not findings:
@@ -74,6 +85,7 @@ def _print_findings(title, findings):
         return
     for f in findings:
         print(f"  [{f.severity.upper():9s}] {f.rule_id}: {f.message}")
+    print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
 def run_check(target, session=None):
@@ -188,10 +200,12 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
         return 1
     n_with_findings = sum(1 for f in results.values() if f)
+    all_findings = [finding for findings in results.values() for finding in findings]
+    severity_summary = _format_severity_summary(rules.count_by_severity(all_findings))
     output_path = os.path.abspath(output)
     print(
         f"\nDone. {n_with_findings} of {len(parsed)} articles have "
-        f"findings. Report: {output_path}"
+        f"findings. {severity_summary} Report: {output_path}"
     )
     if open_output:
         webbrowser.open(f"file://{output_path}")
