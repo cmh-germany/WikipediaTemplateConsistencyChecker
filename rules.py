@@ -100,6 +100,16 @@ class Finding:
         return rule_title(self.rule_id)
 
 
+def count_by_severity(findings: list[Finding]) -> dict[str, int]:
+    """Counts findings by severity. Always returns all four severities
+    in SEVERITY_ORDER order, including zero counts, so CLI/report
+    summary displays don't need to special-case a missing key."""
+    counts = dict.fromkeys(SEVERITY_ORDER, 0)
+    for finding in findings:
+        counts[finding.severity] += 1
+    return counts
+
+
 @dataclass
 class Context:
     """Bundles all the inputs a rule might need."""
