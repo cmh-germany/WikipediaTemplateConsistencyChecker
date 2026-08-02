@@ -344,6 +344,8 @@ once -- rather than an exhaustive suite.
   (`mwparserfromhell`) and parses (possibly incomplete) date values
 * `rules.py` -- the rule set
 * `report.py` -- generates the self-contained HTML report
+* `templates/` -- HTML templates used by `report.py` (`string.Template`,
+  `$placeholder` syntax)
 * `main.py` -- command-line entry point
 * `tests/` -- automated test suite (pytest), see [Running Tests](#running-tests)
 

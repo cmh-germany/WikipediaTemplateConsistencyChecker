@@ -5,12 +5,6 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 
-[tool.ruff.lint.per-file-ignores]
-# report.py embeds literal, single-line CSS/HTML/JS template strings --
-# these aren't Python logic, so wrapping them to fit 88 columns would
-# hurt readability without any real benefit.
-"report.py" = ["E501"]
-
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
