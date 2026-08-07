@@ -41,6 +41,27 @@ def _normalize_template_name(name):
     return text.strip().replace("_", " ").lower()
 
 
+def _positional_params(tmpl: Any) -> list[Any]:
+    """Returns tmpl's numbered positional params (those whose name is a
+    plain digit string, e.g. "1", "2", ...), sorted by that number.
+    A param name that's a digit string too long for int() to parse
+    (Python 3.11+'s sys.get_int_max_str_digits(), 4300 by default) is
+    bogus wikitext either way, so it's excluded rather than crashing
+    the whole parse."""
+    indexed = []
+    for p in tmpl.params:
+        name = str(p.name).strip()
+        if not name.isdigit():
+            continue
+        try:
+            index = int(name)
+        except ValueError:
+            continue
+        indexed.append((index, p))
+    indexed.sort(key=lambda pair: pair[0])
+    return [p for _, p in indexed]
+
+
 def find_infobox(wikitext):
     """Returns the first mwparserfromhell template object for Infobox
     Leichtathlet in wikitext, or None."""
@@ -100,10 +121,7 @@ def _iter_medal_entries(value):
     for tmpl in code.filter_templates(recursive=True):
         if _normalize_template_name(tmpl.name) != "medaillen sommersport":
             continue
-        positional = sorted(
-            (p for p in tmpl.params if str(p.name).strip().isdigit()),
-            key=lambda p: int(str(p.name).strip()),
-        )
+        positional = _positional_params(tmpl)
         for i in range(0, len(positional) - 2, 3):
             yield positional[i], positional[i + 1], positional[i + 2]
 
@@ -222,10 +240,7 @@ def medal_counts_by_category(value):
         if not label:
             continue
         key = normalize_competition_name(label)
-        positional = sorted(
-            (p for p in tmpl.params if str(p.name).strip().isdigit()),
-            key=lambda p: int(str(p.name).strip()),
-        )
+        positional = _positional_params(tmpl)
         entry = result.setdefault(
             key, {"label": label, "gold": 0, "silber": 0, "bronze": 0}
         )
@@ -234,6 +249,22 @@ def medal_counts_by_category(value):
             if color in entry:
                 entry[color] += 1
     return result
+
+
+def _leading_int(text: str) -> int | None:
+    """Parses the leading run of digits in text as an int, or returns
+    None if there isn't one. Guards against Python 3.11+'s int()
+    refusing digit runs beyond a fixed length
+    (sys.get_int_max_str_digits(), 4300 by default) -- a value with
+    that many digits is bogus wikitext either way, so it's treated the
+    same as "no digits found" rather than raising."""
+    m = re.match(r"\d+", text)
+    if not m:
+        return None
+    try:
+        return int(m.group(0))
+    except ValueError:
+        return None
 
 
 def medal_totals_by_category(value):
@@ -251,10 +282,7 @@ def medal_totals_by_category(value):
     for tmpl in code.filter_templates(recursive=True):
         if _normalize_template_name(tmpl.name) != "medaillenspiegel":
             continue
-        positional = sorted(
-            (p for p in tmpl.params if str(p.name).strip().isdigit()),
-            key=lambda p: int(str(p.name).strip()),
-        )
+        positional = _positional_params(tmpl)
         if len(positional) < 4:
             continue
         label = str(positional[0].value).strip()
@@ -267,9 +295,9 @@ def medal_totals_by_category(value):
         for color, param in zip(
             ("gold", "silber", "bronze"), positional[1:4], strict=True
         ):
-            m = re.match(r"\d+", str(param.value).strip())
-            if m:
-                entry[color] += int(m.group(0))
+            n = _leading_int(str(param.value).strip())
+            if n is not None:
+                entry[color] += n
     return result
 
 
