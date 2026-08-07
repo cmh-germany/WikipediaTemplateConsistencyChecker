@@ -8,6 +8,8 @@ have to reload every article each time.
 
 import json
 import os
+import sys
+import tempfile
 import time
 from typing import Any
 
@@ -185,15 +187,45 @@ def templates_exist(session, template_titles):
 
 
 def load_cache():
+    """Loads cache.json, if present. A cache file that isn't valid JSON --
+    e.g. left over from a crash mid-write on an older version of this tool,
+    or from two scans that ran concurrently against the same directory --
+    is treated as absent rather than raised, so a corrupted cache can't
+    permanently block every future run; the next successful save_cache()
+    overwrites it with well-formed data."""
     if not os.path.exists(CACHE_FILE):
         return {}
-    with open(CACHE_FILE, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(CACHE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        print(
+            f"Warning: cache.json is corrupted ({exc}) -- ignoring it and "
+            "starting with an empty cache. It will be overwritten on the "
+            "next successful fetch.",
+            file=sys.stderr,
+        )
+        return {}
 
 
 def save_cache(cache):
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=1)
+    """Writes cache.json atomically: the new content is written to a
+    temporary file in the same directory and then moved into place with
+    os.replace(), which is atomic on both POSIX and Windows. This prevents
+    two concurrently running scans from interleaving their writes into a
+    single corrupted file -- each save fully succeeds or fully fails, and
+    the last one to finish wins."""
+    cache_dir = os.path.dirname(CACHE_FILE) or "."
+    fd, tmp_path = tempfile.mkstemp(
+        dir=cache_dir, prefix=os.path.basename(CACHE_FILE) + ".", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=1)
+        os.replace(tmp_path, CACHE_FILE)
+    except BaseException:
+        os.remove(tmp_path)
+        raise
 
 
 def fetch_all_with_cache(session, titles, use_cache=True):
