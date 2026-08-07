@@ -384,7 +384,25 @@ def check_height_weight_plausibility(ctx):
                 )
             )
             continue
-        value = int(m.group(1))
+        digits = m.group(1)
+        try:
+            value = int(digits)
+        except ValueError:
+            # Python 3.11+ refuses int() on digit runs beyond a fixed
+            # length (sys.get_int_max_str_digits()) to guard against
+            # denial-of-service via huge numbers. A groesse/gewicht
+            # value with that many digits is bogus wikitext either way,
+            # so report it as unparseable instead of crashing.
+            findings.append(
+                Finding(
+                    f"{label}_not_numeric",
+                    LOW,
+                    f"{field_name} contains {len(digits)} digits, too many "
+                    "to parse as a plain number.",
+                    params=[field_name],
+                )
+            )
+            continue
         if not lo <= value <= hi:
             findings.append(
                 Finding(
