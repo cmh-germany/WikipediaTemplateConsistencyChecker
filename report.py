@@ -35,6 +35,18 @@ _ROW_TEMPLATE = _load_template("row.html")
 _SCANNED_SECTION_TEMPLATE = _load_template("scanned_section.html")
 
 
+def _filter_checkbox_html(severity: str, color: str, count: int) -> str:
+    """Renders one entry in the severity filter bar. A severity with no
+    findings still shows its label (so all severity levels stay
+    visible for context), but without a checkbox -- there's nothing
+    for it to filter, and hiding the control avoids visual clutter for
+    a severity that has no results anyway."""
+    label = f'<span class="sev" style="background:{color}">{severity} ({count})</span>'
+    if not count:
+        return f'<span class="sev-empty">{label}</span>'
+    return f'<label><input type="checkbox" value="{severity}" checked> {label}</label>'
+
+
 def generate_html_report(
     results: dict[str, list[Finding]],
     output_path: str,
@@ -99,9 +111,7 @@ def generate_html_report(
 
     severity_counts = count_by_severity([finding for finding, _ in all_rows])
     filter_checkboxes = "\n".join(
-        f'<label><input type="checkbox" value="{sev}" checked> '
-        f'<span class="sev" style="background:{color}">'
-        f"{sev} ({severity_counts[sev]})</span></label>"
+        _filter_checkbox_html(sev, color, severity_counts[sev])
         for sev, color in SEVERITY_COLORS.items()
     )
 
