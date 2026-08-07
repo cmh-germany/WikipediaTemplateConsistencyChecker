@@ -70,16 +70,10 @@ def _check_output_path(path):
 def _format_severity_summary(counts: dict[str, int]) -> str:
     """Formats a counts-by-severity dict (see rules.count_by_severity)
     as e.g. "Total findings: 12 (Very high: 2, High: 3, Medium: 5,
-    Low: 2)", for both --check and --scan console output. Every
-    severity's label is always listed, in stable order, so the overview
-    stays complete even when nothing was found in a given category --
-    but a severity with zero findings is shown by its bare label
-    (e.g. "Medium") without a ": 0" count, to keep the common case
-    (a handful of severities with actual findings) readable."""
+    Low: 2)", for both --check and --scan console output."""
     total = sum(counts.values())
     breakdown = ", ".join(
-        f"{severity.capitalize()}: {count}" if count else severity.capitalize()
-        for severity, count in counts.items()
+        f"{severity.capitalize()}: {count}" for severity, count in counts.items()
     )
     return f"Total findings: {total} ({breakdown})"
 

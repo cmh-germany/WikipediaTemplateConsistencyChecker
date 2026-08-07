@@ -228,9 +228,7 @@ checkbox shows its finding count, e.g. "high (12)"; a severity with zero
 findings still shows its label for context, e.g. "medium (0)", but without
 a checkbox, since there's nothing to filter. The console output ends with
 the same counts broken down by severity, e.g.
-`Total findings: 12 (Very high: 2, High: 3, Medium: 5, Low: 2)` -- again,
-a severity with zero findings is listed by its bare label instead of a
-`: 0` count, e.g. `Total findings: 5 (Very high, High: 3, Medium, Low: 2)`.
+`Total findings: 12 (Very high: 2, High: 3, Medium: 5, Low: 2)`.
 
 A full scan reads roughly 15,000 articles from the Wikipedia API and
 deliberately paces its requests to avoid overloading it, so — especially

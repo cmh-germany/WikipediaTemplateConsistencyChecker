@@ -91,7 +91,7 @@ def test_print_findings_prints_severity_summary(capsys):
     ]
     main._print_findings("Test Article", findings)
     out = capsys.readouterr().out
-    assert "Total findings: 3 (Very high: 1, High: 1, Medium, Low: 1)" in out
+    assert "Total findings: 3 (Very high: 1, High: 1, Medium: 0, Low: 1)" in out
 
 
 def test_print_findings_no_summary_line_when_empty(capsys):
@@ -113,18 +113,9 @@ def test_format_severity_summary_matches_issue_example():
 
 
 def test_format_severity_summary_all_zero():
-    # Zero-count severities still appear (by their bare label, so all
-    # severity levels stay visible), but without a ": 0" count.
     counts = {"very high": 0, "high": 0, "medium": 0, "low": 0}
     assert main._format_severity_summary(counts) == (
-        "Total findings: 0 (Very high, High, Medium, Low)"
-    )
-
-
-def test_format_severity_summary_omits_count_only_for_zero_severities():
-    counts = {"very high": 0, "high": 3, "medium": 0, "low": 2}
-    assert main._format_severity_summary(counts) == (
-        "Total findings: 5 (Very high, High: 3, Medium, Low: 2)"
+        "Total findings: 0 (Very high: 0, High: 0, Medium: 0, Low: 0)"
     )
 
 
@@ -472,4 +463,4 @@ def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
 
     assert result == 0
     out = capsys.readouterr().out
-    assert "Total findings: 2 (Very high, High: 1, Medium, Low: 1)" in out
+    assert "Total findings: 2 (Very high: 0, High: 1, Medium: 0, Low: 1)" in out
