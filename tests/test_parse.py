@@ -243,6 +243,22 @@ def test_medal_totals_by_category_skips_incomplete_call():
     assert parse.medal_totals_by_category(value) == {}
 
 
+def test_medal_totals_by_category_huge_digit_run_does_not_crash():
+    # Python 3.11+'s int() refuses digit runs beyond a fixed length
+    # (sys.get_int_max_str_digits(), 4300 by default) and raises
+    # ValueError instead of converting. Medaillenspiegel counts are
+    # regular wikitext, so a hostile or corrupted value like this must
+    # be treated as unparseable (count left at 0), not crash.
+    value = "{{Medaillenspiegel|Olympische Spiele|" + "9" * 5000 + "|0|0}}"
+    totals = parse.medal_totals_by_category(value)
+    assert totals["olympischespiele"] == {
+        "label": "Olympische Spiele",
+        "gold": 0,
+        "silber": 0,
+        "bronze": 0,
+    }
+
+
 def test_medal_counts_by_category_strips_icon_link_and_medaillenland_call():
     # Real-world 'Wo' values can carry a decorative rings icon and a
     # trailing {{MedaillenLand|...}} note (per parse.py docstring) --

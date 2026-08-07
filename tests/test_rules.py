@@ -311,6 +311,25 @@ def test_medal_count_mismatch_is_flagged():
     assert "medal_count_mismatch" in finding_ids(findings)
 
 
+def test_medal_count_mismatch_huge_digit_run_does_not_crash():
+    # Python 3.11+'s int() refuses digit runs beyond a fixed length
+    # (sys.get_int_max_str_digits(), 4300 by default) and raises
+    # ValueError instead of converting. A hostile or corrupted
+    # Medaillenspiegel gold count like this must be treated as
+    # unparseable (0), not crash run_all_checks -- and since it no
+    # longer matches the single medal actually listed, it's flagged.
+    params = {
+        "medaillen": (
+            "{{Medaillen Sommersport|Wo=Weltmeisterschaften|Gold|2019 Doha|100 m}}"
+        ),
+        "Medaillenspiegel": (
+            "{{Medaillenspiegel|Weltmeisterschaften|" + "9" * 5000 + "|0|0}}"
+        ),
+    }
+    findings = check(params)
+    assert "medal_count_mismatch" in finding_ids(findings)
+
+
 def test_medal_counts_real_bolt_consistent_no_mismatch(bolt_params):
     findings = check(bolt_params)
     assert "medal_count_mismatch" not in finding_ids(findings)

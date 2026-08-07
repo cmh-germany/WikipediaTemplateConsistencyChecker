@@ -236,6 +236,22 @@ def medal_counts_by_category(value):
     return result
 
 
+def _leading_int(text: str) -> int | None:
+    """Parses the leading run of digits in text as an int, or returns
+    None if there isn't one. Guards against Python 3.11+'s int()
+    refusing digit runs beyond a fixed length
+    (sys.get_int_max_str_digits(), 4300 by default) -- a value with
+    that many digits is bogus wikitext either way, so it's treated the
+    same as "no digits found" rather than raising."""
+    m = re.match(r"\d+", text)
+    if not m:
+        return None
+    try:
+        return int(m.group(0))
+    except ValueError:
+        return None
+
+
 def medal_totals_by_category(value):
     """Groups the declared Gold/Silber/Bronze totals from a
     'Medaillenspiegel' field by competition, using each
@@ -267,9 +283,9 @@ def medal_totals_by_category(value):
         for color, param in zip(
             ("gold", "silber", "bronze"), positional[1:4], strict=True
         ):
-            m = re.match(r"\d+", str(param.value).strip())
-            if m:
-                entry[color] += int(m.group(0))
+            n = _leading_int(str(param.value).strip())
+            if n is not None:
+                entry[color] += n
     return result
 
 
