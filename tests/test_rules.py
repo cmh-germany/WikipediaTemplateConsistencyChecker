@@ -199,6 +199,16 @@ def test_weight_implausible_too_heavy_is_flagged():
     assert "weight_implausible" in finding_ids(check(params))
 
 
+def test_height_huge_digit_run_does_not_crash():
+    # Python 3.11+'s int() refuses digit runs beyond a fixed length
+    # (sys.get_int_max_str_digits(), 4300 by default) and raises
+    # ValueError instead of converting. groesse/gewicht is regular
+    # wikitext, so a hostile or corrupted value like this must be
+    # reported as a finding, not crash the checker.
+    params = {"groesse": "9" * 5000}
+    assert "height_not_numeric" in finding_ids(check(params))
+
+
 def test_height_weight_real_bolt_plausible_no_finding(bolt_params):
     findings = check(bolt_params)
     ids = finding_ids(findings)
