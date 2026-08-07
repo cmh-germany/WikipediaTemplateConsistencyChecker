@@ -176,6 +176,18 @@ def test_extract_medal_years_empty_value():
     assert parse.extract_medal_years("") == []
 
 
+def test_extract_medal_years_huge_digit_param_name_does_not_crash():
+    # A template param whose *name* (not value) is a digit string is
+    # treated as positional by mwparserfromhell. Python 3.11+'s int()
+    # refuses digit runs beyond a fixed length
+    # (sys.get_int_max_str_digits(), 4300 by default), so a hostile or
+    # corrupted extra param with a huge numeric name must be ignored
+    # (excluded as bogus), not crash the sort that orders positional
+    # params.
+    value = "{{Medaillen Sommersport|Gold|2019 Doha|100 m|" + "9" * 5000 + "=extra}}"
+    assert parse.extract_medal_years(value) == [2019]
+
+
 @pytest.mark.parametrize(
     "label_a,label_b,expected_key",
     [
@@ -220,6 +232,23 @@ def test_medal_counts_by_category_real_bolt(bolt_params):
     }
 
 
+def test_medal_counts_by_category_huge_digit_param_name_does_not_crash():
+    # Same class of bug as test_extract_medal_years_huge_digit_param_name_
+    # does_not_crash, but going through medal_counts_by_category's own
+    # positional-param sort instead of _iter_medal_entries's.
+    value = (
+        "{{Medaillen Sommersport|Wo=Weltmeisterschaften"
+        "|Gold|2019 Doha|100 m|" + "9" * 5000 + "=extra}}"
+    )
+    counts = parse.medal_counts_by_category(value)
+    assert counts["weltmeisterschaften"] == {
+        "label": "Weltmeisterschaften",
+        "gold": 1,
+        "silber": 0,
+        "bronze": 0,
+    }
+
+
 def test_medal_totals_by_category_real_bolt(bolt_params):
     totals = parse.medal_totals_by_category(bolt_params["Medaillenspiegel"])
     assert totals["olympischespiele"] == {
@@ -254,6 +283,21 @@ def test_medal_totals_by_category_huge_digit_run_does_not_crash():
     assert totals["olympischespiele"] == {
         "label": "Olympische Spiele",
         "gold": 0,
+        "silber": 0,
+        "bronze": 0,
+    }
+
+
+def test_medal_totals_by_category_huge_digit_param_name_does_not_crash():
+    # Same class of bug as test_extract_medal_years_huge_digit_param_name_
+    # does_not_crash: an extra param with a huge numeric *name* must be
+    # excluded from the positional sort, not crash it, leaving the
+    # genuine positional args (label, gold, silber, bronze) intact.
+    value = "{{Medaillenspiegel|Olympische Spiele|8|0|0|" + "9" * 5000 + "=extra}}"
+    totals = parse.medal_totals_by_category(value)
+    assert totals["olympischespiele"] == {
+        "label": "Olympische Spiele",
+        "gold": 8,
         "silber": 0,
         "bronze": 0,
     }
