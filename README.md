@@ -217,7 +217,11 @@ Creates `report.html` with all findings, sorted by severity by default
 double-clicking it in your file browser, or automatically with `--open`
 below. Already fetched articles are cached in `cache.json` so a repeated
 run is faster (bypass the cache with `--no-cache`, e.g. if articles have
-changed since — deleting `cache.json` has the same effect). A collapsible
+changed since — deleting `cache.json` has the same effect). Writes to
+`cache.json` are atomic, so running two scans at the same time won't
+corrupt it; if it's ever found corrupted anyway (e.g. an interrupted
+write from an older version of this tool), it's treated as empty and
+rebuilt rather than crashing the run. A collapsible
 list of every scanned article, with its finding count, is always included
 at the bottom of the report, collapsed by default. Each severity filter
 checkbox shows its finding count, e.g. "high (12)", and the console output
