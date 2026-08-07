@@ -27,6 +27,29 @@ def test_filter_checkboxes_show_counts_for_each_severity(tmp_path):
     assert "low (1)" in html
 
 
+def test_filter_checkboxes_omit_checkbox_for_zero_findings(tmp_path):
+    # medium has no findings here -- its label must still be shown
+    # (issue #13: all severity labels stay visible for context), but
+    # without a checkbox, since there's nothing to filter.
+    results = {
+        "Article A": [
+            Finding("r1", "very high", "m1"),
+            Finding("r2", "high", "m2"),
+        ],
+        "Article B": [Finding("r3", "low", "m3")],
+    }
+    output = tmp_path / "report.html"
+
+    generate_html_report(results, str(output))
+
+    html = output.read_text(encoding="utf-8")
+    assert '<input type="checkbox" value="very high"' in html
+    assert '<input type="checkbox" value="high"' in html
+    assert '<input type="checkbox" value="low"' in html
+    assert '<input type="checkbox" value="medium"' not in html
+    assert "medium (0)" in html
+
+
 def test_filter_checkboxes_all_zero_when_no_findings(tmp_path):
     results: dict[str, list[Finding]] = {"Clean Article": []}
     output = tmp_path / "report.html"
@@ -38,6 +61,7 @@ def test_filter_checkboxes_all_zero_when_no_findings(tmp_path):
     assert "high (0)" in html
     assert "medium (0)" in html
     assert "low (0)" in html
+    assert '<input type="checkbox"' not in html
 
 
 def test_filter_checkboxes_count_across_all_articles_not_just_first(tmp_path):

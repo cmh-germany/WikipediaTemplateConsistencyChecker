@@ -224,8 +224,10 @@ write from an older version of this tool), it's treated as empty and
 rebuilt rather than crashing the run. A collapsible
 list of every scanned article, with its finding count, is always included
 at the bottom of the report, collapsed by default. Each severity filter
-checkbox shows its finding count, e.g. "high (12)", and the console output
-ends with the same counts broken down by severity, e.g.
+checkbox shows its finding count, e.g. "high (12)"; a severity with zero
+findings still shows its label for context, e.g. "medium (0)", but without
+a checkbox, since there's nothing to filter. The console output ends with
+the same counts broken down by severity, e.g.
 `Total findings: 12 (Very high: 2, High: 3, Medium: 5, Low: 2)`.
 
 A full scan reads roughly 15,000 articles from the Wikipedia API and
