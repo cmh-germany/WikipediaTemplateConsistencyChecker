@@ -100,6 +100,34 @@ def test_print_findings_no_summary_line_when_empty(capsys):
     assert "Total findings" not in out
 
 
+def test_print_findings_shows_note_when_present(capsys):
+    from rules import Finding
+
+    finding = Finding("some_rule", "high", "Something is wrong", note="Extra context")
+    main._print_findings("Test Article", [finding])
+    out = capsys.readouterr().out
+    assert "(Note: Extra context)" in out
+
+
+def test_print_findings_no_note_suffix_when_absent(capsys):
+    from rules import Finding
+
+    finding = Finding("some_rule", "high", "Something is wrong")
+    main._print_findings("Test Article", [finding])
+    out = capsys.readouterr().out
+    assert "Note:" not in out
+
+
+def test_print_findings_escapes_control_chars_in_note(capsys):
+    from rules import Finding
+
+    finding = Finding("some_rule", "high", "Something is wrong", note="Bad\x1b[31m")
+    main._print_findings("Test Article", [finding])
+    out = capsys.readouterr().out
+    assert "\x1b" not in out
+    assert "\\x1b[31m" in out
+
+
 def test_print_findings_escapes_control_chars_in_message(capsys):
     from rules import Finding
 

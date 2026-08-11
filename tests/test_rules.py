@@ -26,6 +26,10 @@ def finding_ids(findings):
     return {f.rule_id for f in findings}
 
 
+def finding_by_id(findings, rule_id):
+    return next(f for f in findings if f.rule_id == rule_id)
+
+
 def check(params, **kwargs):
     kwargs.setdefault("today", TODAY)
     return run_all_checks(params, **kwargs)
@@ -58,7 +62,13 @@ def test_real_clean_articles_produce_no_findings(fixture_name, request):
 
 def test_death_date_with_non_deceased_status_is_flagged():
     params = {"status": "a", "sterbedatum": "2020-01-01"}
-    assert "death_date_with_non_deceased_status" in finding_ids(check(params))
+    findings = check(params)
+    assert "death_date_with_non_deceased_status" in finding_ids(findings)
+    finding = finding_by_id(findings, "death_date_with_non_deceased_status")
+    # The rendering-consequence aside lives in `note`, not appended to
+    # `message` (issue #2), so message stays the short core fact.
+    assert "Vorlage:Status Sportler" not in finding.message
+    assert "Vorlage:Status Sportler" in finding.note
 
 
 def test_status_deceased_without_death_date_is_flagged():
@@ -66,6 +76,7 @@ def test_status_deceased_without_death_date_is_flagged():
     findings = check(params)
     assert "status_deceased_without_death_date" in finding_ids(findings)
     assert findings[0].severity == "very high"
+    assert findings[0].note is None
 
 
 def test_status_deceased_with_death_date_real_owens_no_finding(owens_params):
@@ -79,6 +90,8 @@ def test_status_spelled_out_word_is_flagged():
     findings = check(params)
     assert "status_code_spelled_out" in finding_ids(findings)
     assert findings[0].severity == "low"
+    assert "coincidence" not in findings[0].message
+    assert "coincidence" in findings[0].note
 
 
 def test_invalid_status_code_is_flagged():
@@ -86,6 +99,8 @@ def test_invalid_status_code_is_flagged():
     findings = check(params)
     assert "invalid_status_code" in finding_ids(findings)
     assert findings[0].severity == "very high"
+    assert "as-is" not in findings[0].message
+    assert findings[0].note == "The infobox will likely display this raw text as-is."
 
 
 def test_valid_single_letter_status_real_bolt_no_finding(bolt_params):
@@ -232,13 +247,18 @@ def test_height_weight_real_bolt_plausible_no_finding(bolt_params):
 
 def test_nation_nonstandard_format_is_flagged():
     params = {"nation": "Philippinen"}
-    assert "nation_nonstandard_format" in finding_ids(check(params))
+    findings = check(params)
+    assert "nation_nonstandard_format" in finding_ids(findings)
+    assert finding_by_id(findings, "nation_nonstandard_format").note is None
 
 
 def test_nation_unknown_code_is_flagged():
     params = {"nation": "{{ZZZ}}"}
     findings = check(params, nation_exists={"Vorlage:ZZZ": False})
     assert "nation_code_unknown" in finding_ids(findings)
+    finding = finding_by_id(findings, "nation_code_unknown")
+    assert "flag/country name" not in finding.message
+    assert "flag/country name" in finding.note
 
 
 def test_nation_known_templated_code_real_bolt_no_finding(bolt_params):
@@ -278,6 +298,9 @@ def test_discipline_link_unknown_is_flagged():
     params = {"disziplin": "Bogenschiessen"}
     findings = check(params, discipline_exists={"Bogenschiessen": False})
     assert "discipline_link_unknown" in finding_ids(findings)
+    finding = finding_by_id(findings, "discipline_link_unknown")
+    assert "typo" not in finding.message
+    assert finding.note == "Possibly a typo."
 
 
 def test_discipline_known_bare_value_no_finding():
