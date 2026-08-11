@@ -100,6 +100,34 @@ def test_print_findings_no_summary_line_when_empty(capsys):
     assert "Total findings" not in out
 
 
+def test_print_findings_escapes_control_chars_in_message(capsys):
+    from rules import Finding
+
+    # e.g. a crafted "sterbedatum" value smuggling an ANSI escape sequence
+    finding = Finding("some_rule", "high", "Some\x1b[31mvalue\x1b[0m")
+    main._print_findings("Test Article", [finding])
+    out = capsys.readouterr().out
+    assert "\x1b" not in out
+    assert "\\x1b[31mvalue\\x1b[0m" in out
+
+
+def test_print_findings_escapes_control_chars_in_title(capsys):
+    main._print_findings("Evil\x1b]0;pwned\x07Title", [])
+    out = capsys.readouterr().out
+    assert "\x1b" not in out
+    assert "\x07" not in out
+    assert "\\x1b]0;pwned\\x07Title" in out
+
+
+def test_sanitize_console_text_escapes_newlines_and_carriage_returns():
+    assert main._sanitize_console_text("a\nb\rc") == "a\\x0ab\\x0dc"
+
+
+def test_sanitize_console_text_leaves_plain_text_unchanged():
+    text = "Something is wrong with birth year 1990 (ä, ö, ü included)"
+    assert main._sanitize_console_text(text) == text
+
+
 # ---------------------------------------------------------------------
 # _format_severity_summary
 # ---------------------------------------------------------------------

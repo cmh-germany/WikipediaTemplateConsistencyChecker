@@ -12,6 +12,7 @@ Two modes:
 
 import argparse
 import os
+import re
 import sys
 import webbrowser
 
@@ -78,13 +79,29 @@ def _format_severity_summary(counts: dict[str, int]) -> str:
     return f"Total findings: {total} ({breakdown})"
 
 
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _sanitize_console_text(text: str) -> str:
+    """Escapes ASCII control characters -- including ANSI/terminal
+    escape sequences (\\x1b), newlines, and carriage returns -- in text
+    that ultimately originates from a Wikipedia article's wikitext
+    (a finding's message) or from a user-supplied URL (the article
+    title). Left unescaped, a crafted field value could move the
+    cursor, hide/rewrite prior output, or change the terminal's title
+    bar when printed verbatim; every finding is expected to render as
+    a single plain-text console line anyway."""
+    return _CONTROL_CHAR_RE.sub(lambda m: f"\\x{ord(m.group()):02x}", text)
+
+
 def _print_findings(title, findings):
-    print(f"\n=== {title} ===")
+    print(f"\n=== {_sanitize_console_text(title)} ===")
     if not findings:
         print("  No findings.")
         return
     for f in findings:
-        print(f"  [{f.severity.upper():9s}] {f.rule_id}: {f.message}")
+        message = _sanitize_console_text(f.message)
+        print(f"  [{f.severity.upper():9s}] {f.rule_id}: {message}")
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
