@@ -213,9 +213,14 @@ python main.py --scan
 ```
 
 Creates `report.html` with all findings, sorted by severity by default
-(click any column header to re-sort, e.g. by article or rule). Open it by
-double-clicking it in your file browser, or automatically with `--open`
-below. Already fetched articles are cached in `cache.json` so a repeated
+(click any column header to re-sort, e.g. by article or rule). Each row's
+Message column states the core finding; a separate Note column holds
+auxiliary context some rules add (typically what the infobox will likely
+render given the bad value), so the message stays terse and both columns
+can be sorted/read independently — a finding without a note shows "–"
+there. Open it by double-clicking it in your file browser, or
+automatically with `--open` below. Already fetched articles are cached
+in `cache.json` so a repeated
 run is faster (bypass the cache with `--no-cache`, e.g. if articles have
 changed since — deleting `cache.json` has the same effect). Writes to
 `cache.json` are atomic, so running two scans at the same time won't
@@ -251,7 +256,10 @@ python main.py --check my_draft.wikitext
 ```
 
 Findings are printed to the console, followed by the same severity
-breakdown as the report (omitted when there are no findings).
+breakdown as the report (omitted when there are no findings). A finding
+with a note (see the Note column above) shows it inline as
+`(Note: ...)` after the message, since there's no separate column on
+the console.
 
 The article-title form must match the exact spelling/capitalization of the
 Wikipedia page title; if you're unsure, copying the full URL from your

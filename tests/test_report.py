@@ -64,6 +64,32 @@ def test_filter_checkboxes_all_zero_when_no_findings(tmp_path):
     assert '<input type="checkbox"' not in html
 
 
+def test_note_column_shows_note_when_present(tmp_path):
+    results = {
+        "Article A": [Finding("r1", "high", "core message", note="extra context")],
+    }
+    output = tmp_path / "report.html"
+
+    generate_html_report(results, str(output))
+
+    html = output.read_text(encoding="utf-8")
+    assert "<th>Note</th>" in html
+    assert "extra context" in html
+    # The note must not also be appended to the message cell (issue #2).
+    assert "core message extra context" not in html
+
+
+def test_note_column_shows_dash_when_absent(tmp_path):
+    results = {"Article A": [Finding("r1", "high", "core message")]}
+    output = tmp_path / "report.html"
+
+    generate_html_report(results, str(output))
+
+    html = output.read_text(encoding="utf-8")
+    # Both the params and note cells fall back to a dash for this finding.
+    assert html.count("&ndash;</td>") == 2
+
+
 def test_filter_checkboxes_count_across_all_articles_not_just_first(tmp_path):
     # Regression guard: severity_counts must be built from every
     # article's findings, not e.g. accidentally only the last one

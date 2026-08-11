@@ -101,7 +101,10 @@ def _print_findings(title, findings):
         return
     for f in findings:
         message = _sanitize_console_text(f.message)
-        print(f"  [{f.severity.upper():9s}] {f.rule_id}: {message}")
+        line = f"  [{f.severity.upper():9s}] {f.rule_id}: {message}"
+        if f.note:
+            line += f" (Note: {_sanitize_console_text(f.note)})"
+        print(line)
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
