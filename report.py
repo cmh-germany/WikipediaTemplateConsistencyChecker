@@ -90,6 +90,8 @@ def generate_html_report(
                 params_sort=html.escape(", ".join(finding.params).lower()),
                 message=html.escape(finding.message),
                 message_sort=html.escape(finding.message.lower()),
+                note_html=html.escape(finding.note) if finding.note else "&ndash;",
+                note_sort=html.escape((finding.note or "").lower()),
             )
         )
 
@@ -122,7 +124,7 @@ def generate_html_report(
         n_findings=n_findings,
         template_doc_url=TEMPLATE_DOC_URL,
         filter_checkboxes=filter_checkboxes,
-        rows="\n".join(rows) if rows else "<tr><td colspan=5>No findings.</td></tr>",
+        rows="\n".join(rows) if rows else "<tr><td colspan=6>No findings.</td></tr>",
         scanned_section=scanned_section,
     )
 
