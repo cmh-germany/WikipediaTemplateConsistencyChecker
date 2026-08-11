@@ -88,12 +88,21 @@ def rule_title(rule_id):
 
 @dataclass
 class Finding:
-    """A single consistency-check result produced by a check_* rule."""
+    """A single consistency-check result produced by a check_* rule.
+
+    `note` is optional, auxiliary context that isn't part of the core
+    finding -- typically what the template will likely render given the
+    bad value -- kept separate from `message` so report consumers (the
+    HTML report's own column, CSV-style copy/paste, filtering) can treat
+    the core finding text and the aside independently instead of having
+    to parse one out of the other.
+    """
 
     rule_id: str
     severity: str
     message: str
     params: list = field(default_factory=list)
+    note: str | None = None
 
     @property
     def title(self):
@@ -144,10 +153,13 @@ def check_death_date_with_non_deceased_status(ctx):
                 "death_date_with_non_deceased_status",
                 HIGH,
                 f"Death date (sterbedatum) is given, but status='{ctx.get('status')}' "
-                "(not 'v'). Vorlage:Status Sportler will still render "
-                "'verstorben' automatically, but the status field itself is "
-                "stale and should be updated to 'v'.",
+                "(not 'v').",
                 params=["sterbedatum", "status"],
+                note=(
+                    "Vorlage:Status Sportler will still render 'verstorben' "
+                    "automatically, but the status field itself is stale and "
+                    "should be updated to 'v'."
+                ),
             )
         ]
     return []
@@ -181,10 +193,13 @@ def check_invalid_status_code(ctx):
                 LOW,
                 f"status='{status}' spells out the German word instead of "
                 f"using the documented single-letter code "
-                f"('{STATUS_FULL_WORDS[normalized]}'). Renders correctly by "
-                "coincidence (Vorlage:Status Sportler falls back to "
-                "displaying the raw value), but should be normalized.",
+                f"('{STATUS_FULL_WORDS[normalized]}').",
                 params=["status"],
+                note=(
+                    "Renders correctly by coincidence (Vorlage:Status Sportler "
+                    "falls back to displaying the raw value), but should be "
+                    "normalized."
+                ),
             )
         ]
     return [
@@ -192,9 +207,9 @@ def check_invalid_status_code(ctx):
             "invalid_status_code",
             VERY_HIGH,
             f"status='{status}' is not a valid code (allowed: a, g, n, p, u, "
-            "v, z) and doesn't match a known spelled-out status word either "
-            "-- the infobox will likely display this raw text as-is.",
+            "v, z) and doesn't match a known spelled-out status word either.",
             params=["status"],
+            note="The infobox will likely display this raw text as-is.",
         )
     ]
 
@@ -473,10 +488,12 @@ def check_nation_code(ctx):
                 Finding(
                     "nation_code_unknown",
                     MEDIUM,
-                    f"nation='{nation}' -- 'Vorlage:{code}' does not exist, "
-                    "the infobox will likely display the raw code instead of "
-                    "a flag/country name.",
+                    f"nation='{nation}' -- 'Vorlage:{code}' does not exist.",
                     params=["nation"],
+                    note=(
+                        "The infobox will likely display the raw code instead "
+                        "of a flag/country name."
+                    ),
                 )
             )
     return findings
@@ -506,9 +523,9 @@ def check_discipline_link(ctx):
                 "discipline_link_unknown",
                 LOW,
                 f"disziplin='{disziplin}' does not match an existing "
-                "article, the infobox will show it as plain unlinked text "
-                "-- possibly a typo.",
+                "article, the infobox will show it as plain unlinked text.",
                 params=["disziplin"],
+                note="Possibly a typo.",
             )
         ]
     return []
