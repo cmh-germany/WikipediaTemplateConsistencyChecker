@@ -114,6 +114,12 @@ genuinely doesn't apply.
 
 ## Git Workflow
 
+* When starting work on a GitHub issue, first `git fetch origin` and pull all
+  changes from the `main` branch. Then create a new branch named after the
+  issue (e.g. `20-cli-argument---overwrite-cache-flag-with-cache-age-detection`
+  for
+  https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/20).
+  All commits for that issue happen on this branch.
 * Commit in small, focused, logically-independent steps rather than one
   large commit per task — each commit should represent one coherent change
   that could be reviewed on its own.
