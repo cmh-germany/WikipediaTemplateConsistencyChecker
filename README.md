@@ -377,10 +377,12 @@ once -- rather than an exhaustive suite.
 ## Known Limitations
 
 * Date recognition covers ISO dates (`YYYY-MM-DD`), German free-text dates
-  (`12. März 1995`), and plain years. More exotic `{{DATUM|...}}` calls or
-  purely numeric partial dates may not be recognized -- in that case the
-  affected rule is silently skipped for that article (no false positive, but
-  also no check performed).
+  including Austrian spellings (`12. März 1995`, `23. Jänner 1915`), and
+  plain years. Month-and-year-only free text without a day (e.g. `Mai
+  2015`, common in `karriereende`/`update`) and more exotic `{{DATUM|...}}`
+  calls are not recognized -- in that case the affected rule is silently
+  skipped for that article (no false positive, but also no check
+  performed).
 * The `nation` field is checked both as a bare ISO-3166-1 code (`ETH`, the
   documented form) and as one or more flag template calls (`{{JAM}}`, the
   more common real-world form, including multiple codes for athletes who
@@ -406,6 +408,50 @@ once -- rather than an exhaustive suite.
 * The `disziplin` link check only applies to bare, unlinked values -- most
   articles with more than one discipline already hand-write their own
   wikilinks, which the template doesn't touch.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- RULE VALIDATION -->
+## Rule Validation
+
+New or changed detection logic is spot-checked against a live sample of real
+Wikipedia articles before being considered done, in addition to the unit test
+suite -- this catches cases the hand-crafted tests didn't anticipate, and
+confirms a rule doesn't produce a wave of false positives on the messy,
+inconsistently-formatted real corpus. Method: run `python main.py --scan
+--limit N` against the live template-embedding list (no synthetic data),
+review the resulting findings by `rule_id` for plausibility, and, for
+date-related changes, spot-check the raw wikitext of any field where
+`parse.parse_date`/`date_range` silently returns `None`.
+
+**`date_range`'s plausibility window (issue #23):** `date_range` used to
+reject any year outside `[1850, 2100]` before a value ever reached a rule --
+which silently disabled the future-date/comparison rules for exactly the
+implausible values (e.g. a transposed-digit typo like `2233` for `2023`)
+they exist to catch. Validated against a live sample of 500 articles
+(`python main.py --scan --limit 500`): 102/500 articles flagged, 124
+findings total (0 very high, 65 high, 5 medium, 54 low), dominated by
+`missing_birthplace`, `update_outdated`, `medal_count_mismatch`, and
+`death_date_with_non_deceased_status` (31 real occurrences) -- none of
+which regressed after removing the window. No article in this particular
+sample happened to contain the specific out-of-range-year typo the issue
+describes (expected: it's a rare data-entry mistake, not a common pattern),
+so the fix itself is exercised directly by the regression tests in
+`tests/test_parse.py`/`tests/test_rules.py` instead.
+
+**Similar-bug audit, same live sample:** re-parsing all 500 articles' date
+fields directly (bypassing the rules, to see what `parse_date` silently
+gives up on) surfaced two more real, previously-silent gaps, both fixed
+alongside #23:
+* `extract_medal_years`'s year regex only matched years spelled
+  18xx/19xx/20xx, so a typo'd medal year outside that range was never
+  extracted and `check_medal_year_before_birth` could never fire for it.
+* `parse.MONTHS` didn't recognize the Austrian German month names
+  "Jänner"/"Feber" (January/February) -- e.g. Herma Bauma's
+  `geburtstag = 23. Jänner 1915` failed to parse at all, silently disabling
+  every date-based rule for that article.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

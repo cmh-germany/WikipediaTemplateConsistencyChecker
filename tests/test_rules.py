@@ -135,6 +135,29 @@ def test_death_date_in_future_is_flagged():
     assert "death_date_in_future" in finding_ids(check(params))
 
 
+def test_death_date_in_future_far_typo_year_is_flagged():
+    # Regression test for issue #23: a transposed-digit typo like
+    # "2233" (meant as "2023") used to be silently dropped by
+    # date_range's old [1850, 2100] plausibility window, so this
+    # obviously-future date produced no finding at all.
+    params = {"sterbedatum": "2233-01-01"}
+    assert "death_date_in_future" in finding_ids(check(params))
+
+
+def test_birth_date_in_future_far_typo_year_is_flagged():
+    params = {"geburtstag": "2233-01-01"}
+    assert "birth_date_in_future" in finding_ids(check(params))
+
+
+def test_implausible_age_at_death_far_typo_year_is_flagged():
+    # Same root cause as the future-date case above, but on the "too
+    # old" side: a typo'd birth year outside the old plausibility
+    # window used to be excluded from every comparison, not just
+    # future-date checks, silently hiding this mismatch too.
+    params = {"geburtstag": "1500-01-01", "sterbedatum": "2020-01-01"}
+    assert "implausible_age_at_death" in finding_ids(check(params))
+
+
 def test_implausible_age_at_death_too_old_is_flagged():
     params = {"geburtstag": "1850-01-01", "sterbedatum": "2020-01-01"}
     assert "implausible_age_at_death" in finding_ids(check(params))
@@ -377,6 +400,18 @@ def test_medal_implausibly_young_is_flagged():
         "medaillen": "{{Medaillen Sommersport|Gold|2008 Testort|100 m}}",
     }
     assert "medal_implausibly_young" in finding_ids(check(params))
+
+
+def test_medal_year_before_birth_typo_outside_old_extraction_window_is_flagged():
+    # Regression test, same root cause as issue #23: a typo like "1023"
+    # (meant "2023") falls outside the 18xx/19xx/20xx range
+    # extract_medal_years used to restrict itself to, so it was
+    # silently never extracted and this rule never fired.
+    params = {
+        "geburtstag": "2000-01-01",
+        "medaillen": "{{Medaillen Sommersport|Gold|1023 Testort|100 m}}",
+    }
+    assert "medal_before_birth" in finding_ids(check(params))
 
 
 def test_medal_years_real_bolt_plausible_no_finding(bolt_params):

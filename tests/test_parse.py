@@ -176,6 +176,16 @@ def test_extract_medal_years_empty_value():
     assert parse.extract_medal_years("") == []
 
 
+def test_extract_medal_years_implausible_typo_year_still_extracted():
+    # Regression test, same root cause as issue #23: extract_medal_years
+    # used to only match years starting with 18/19/20
+    # ("(1[89]\\d{2}|20\\d{2})"), so a transposed-digit typo like "1023"
+    # (meant "2023") was silently dropped instead of being extracted
+    # and later flagged by check_medal_year_before_birth.
+    value = "{{Medaillen Sommersport|Gold|1023 Doha|Weitsprung}}"
+    assert parse.extract_medal_years(value) == [1023]
+
+
 def test_extract_medal_years_huge_digit_param_name_does_not_crash():
     # A template param whose *name* (not value) is a digit string is
     # treated as positional by mwparserfromhell. Python 3.11+'s int()
@@ -374,6 +384,16 @@ def test_parse_date_maerz_ascii_spelling_variant():
     assert parse.parse_date("16. Maerz 1995") == DateParts(1995, 3, 16)
 
 
+def test_parse_date_austrian_jaenner_spelling_variant():
+    # Real-world case found live on German Wikipedia (Herma Bauma):
+    # Austrian German spells January "Jänner", not "Januar".
+    assert parse.parse_date("23. Jänner 1915") == DateParts(1915, 1, 23)
+
+
+def test_parse_date_austrian_feber_spelling_variant():
+    assert parse.parse_date("5. Feber 1979") == DateParts(1979, 2, 5)
+
+
 def test_parse_date_unrecognized_free_text_returns_none():
     # Deliberately not a supported format (decade text, not a year).
     assert parse.parse_date("etwa in den 1990er Jahren") is None
@@ -420,6 +440,23 @@ def test_date_range_none_input():
     assert parse.date_range(None) is None
 
 
-def test_date_range_implausible_year_returns_none():
-    # Deliberately implausible (a typo like "1500" instead of "1950").
-    assert parse.date_range(DateParts(1500, None, None)) is None
+def test_date_range_implausible_year_is_not_filtered_out():
+    # Regression test for issue #23: date_range used to silently
+    # return None for years outside [1850, 2100], which disabled
+    # future-date/comparison rules for exactly the typo'd values
+    # (e.g. "2233" for "2023") those rules exist to catch.
+    assert parse.date_range(DateParts(2233, None, None)) == (
+        date(2233, 1, 1),
+        date(2233, 12, 31),
+    )
+    assert parse.date_range(DateParts(1500, None, None)) == (
+        date(1500, 1, 1),
+        date(1500, 12, 31),
+    )
+
+
+def test_date_range_year_zero_returns_none():
+    # Year 0 isn't a real datetime.date (Python's date type starts at
+    # year 1) -- still guarded, just via the date() construction
+    # itself rather than a hand-picked plausibility window.
+    assert parse.date_range(DateParts(0, None, None)) is None
