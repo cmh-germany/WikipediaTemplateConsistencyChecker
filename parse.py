@@ -13,9 +13,17 @@ import mwparserfromhell
 TEMPLATE_NAMES = {"infobox leichtathlet"}
 
 # German month names, as they appear in the infobox's date fields.
+# Includes Austrian German variants ("Jänner"/"Feber" for
+# January/February) -- both spellings are in active real-world use for
+# Austrian athletes' birth/death dates (found live on German Wikipedia,
+# e.g. Herma Bauma's "23. Jänner 1915"), and treating them as
+# unrecognized silently disables every date-based rule for that field.
 MONTHS = {
     "januar": 1,
+    "jänner": 1,
+    "jaenner": 1,
     "februar": 2,
+    "feber": 2,
     "märz": 3,
     "maerz": 3,
     "april": 4,
@@ -131,11 +139,20 @@ def extract_medal_years(value):
     medal entry. Ignores the discipline/event text and link targets
     entirely, which can otherwise contain unrelated numbers that merely
     look like years (e.g. a typo such as "1950 m Staffel", or a link
-    target like "...von 1951 bis 1990...")."""
+    target like "...von 1951 bis 1990...").
+
+    Matches any 4-digit run rather than restricting to a "plausible"
+    range like 1800-2099: since the surrounding scan already isolates
+    the "Jahr Ort" argument specifically, a 4-digit number there is a
+    year, however implausible (e.g. a typo like "1023" for "2023").
+    Excluding such years here would silently disable
+    rules.check_medal_year_before_birth for exactly the typo'd values
+    it exists to catch -- the same bug as issue #23's date_range
+    window, applied to medal years instead of birth/death dates."""
     years: list[int] = []
     for _color, year_place, _discipline in _iter_medal_entries(value):
         text = visible_text(str(year_place.value))
-        years.extend(int(y) for y in re.findall(r"(1[89]\d{2}|20\d{2})", text))
+        years.extend(int(y) for y in re.findall(r"\d{4}", text))
     return years
 
 
@@ -378,11 +395,18 @@ def parse_date(value):
 def date_range(parts):
     """Converts DateParts (possibly with unknown month/day) into an
     (earliest_possible_date, latest_possible_date) pair of
-    datetime.date. Returns None if no year is known, or the year is
-    outside a plausible range."""
+    datetime.date. Returns None if no year is known, or the year can't
+    be turned into a real datetime.date (e.g. year 0, which Python's
+    date type doesn't support).
+
+    Deliberately does *not* reject years outside some "plausible"
+    window (say, 1850-2100): an implausible year -- a transposed-digit
+    typo like "2233" for "2023", or a copy-paste mistake -- is exactly
+    the kind of value the comparison-based rules (birth/death order,
+    future-date checks, age-at-death, ...) exist to catch. Silently
+    discarding it here would disable those rules for the one case they
+    were meant to catch, rather than flagging it (see issue #23)."""
     if parts is None or parts.year is None:
-        return None
-    if not 1850 <= parts.year <= 2100:
         return None
 
     month_known = parts.month is not None
