@@ -141,8 +141,14 @@ def list_pages_using_template(session, template_name=TEMPLATE_NAME, limit=None):
 
 def fetch_pages_content_and_categories(session, titles):
     """Fetches the current wikitext and categories for a list of titles.
-    Returns {title: {"wikitext": str, "categories": [str]}}."""
+    Prints one progress line per batch ("{done}/{total} articles
+    fetched") so a large --scan run shows visible activity instead of
+    appearing to hang during its several-minutes-long, deliberately
+    throttled fetch loop. Returns {title: {"wikitext": str,
+    "categories": [str]}}."""
     result = {}
+    total = len(titles)
+    done = 0
     for i in range(0, len(titles), BATCH_SIZE):
         batch = titles[i : i + BATCH_SIZE]
         params = {
@@ -163,6 +169,8 @@ def fetch_pages_content_and_categories(session, titles):
             wikitext = revisions[0]["slots"]["main"]["content"]
             categories = [c["title"] for c in page.get("categories", [])]
             result[title] = {"wikitext": wikitext, "categories": categories}
+        done += len(batch)
+        print(f"{done}/{total} articles fetched")
         time.sleep(REQUEST_DELAY_SECONDS)
     return result
 
