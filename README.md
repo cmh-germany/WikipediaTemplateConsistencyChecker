@@ -240,6 +240,10 @@ deliberately paces its requests to avoid overloading it, so — especially
 on the first run, before `cache.json` is populated — expect it to take
 several minutes rather than seconds. This is normal, not a freeze; use
 `--limit 50` (below) first if you just want to confirm the tool works.
+While articles are being fetched (not yet cached), the console prints a
+`{done}/{total} articles fetched` line after each batch (50 articles at
+a time) so a long-running scan keeps showing visible progress instead of
+appearing to hang.
 
 ```sh
 python main.py --scan --limit 50     # only scan the first 50 articles
