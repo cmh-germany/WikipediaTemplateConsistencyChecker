@@ -53,6 +53,46 @@ For anything smaller, extend the module that already owns that concern.
   When you touch a function for another reason, it's fine to add hints/a
   docstring while you're there — but don't do drive-by rewrites of unrelated
   code just to backfill style.
+* Use `is`/`is not` when comparing with `None`, `True`, or `False`; prefer
+  list/dict comprehensions, generator expressions, and `enumerate()` over
+  manually-managed index/counter variables.
+* Use context managers (`with`) for file and other resource handling instead
+  of manual open/close.
+
+### Function design
+
+* Keep each function to a single responsibility; prefer returning early over
+  nesting the main logic inside conditionals.
+* Never use a mutable object (list, dict, set) as a default argument value —
+  use `None` and construct the mutable default inside the function body.
+* Five or fewer parameters is the target; beyond that, group related values
+  into a dataclass rather than adding more positional/keyword arguments.
+
+### Class design
+
+* Keep each class to a single responsibility with a simple `__init__`; if the
+  class is just a data container, use `@dataclass` instead of hand-writing it.
+* Prefer composition over inheritance.
+* Use `@property` for computed attributes rather than a getter-style method.
+
+## Error Handling
+
+* Never swallow an exception silently — at minimum log it; a bare `except:`
+  (or `except Exception:` used as a catch-all) is not acceptable where a
+  specific exception type is known.
+* Catch the specific exception type you expect and can meaningfully handle,
+  not a broad type that also hides unrelated bugs.
+* Error messages must be meaningful and actionable — see [CLI
+  Design](#cli-design) for the additional bar CLI-facing errors must clear.
+
+## Security
+
+* This tool only ever reads public Wikipedia content (`fetch.py`); it does
+  not currently need credentials. If a future change introduces any secret,
+  token, or API key, it must come from an environment variable or a local,
+  `.gitignore`d file — never be hard-coded or committed.
+* Never log or print a URL, header, or other value that could carry a secret
+  (e.g. an API key in a query string).
 
 ## Linting, Formatting & Type Checking
 
