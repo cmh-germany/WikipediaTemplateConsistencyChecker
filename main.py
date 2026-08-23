@@ -238,10 +238,14 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
     severity_summary = _format_severity_summary(rules.count_by_severity(all_findings))
     print(
         f"\nDone. {n_with_findings} of {len(parsed)} articles have "
-        f"findings. {severity_summary} Report: {output_path}"
+        f"findings. {severity_summary} Report: {output_path}\n"
     )
+
     if open_output:
+        print(f"Opening report in your default browser: {output_path} ...")
         webbrowser.open(f"file://{output_path}")
+        print("Opened report.")
+
     return 0
 
 
