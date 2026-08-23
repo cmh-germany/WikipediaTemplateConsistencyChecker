@@ -219,10 +219,14 @@ auxiliary context some rules add (typically what the infobox will likely
 render given the bad value), so the message stays terse and both columns
 can be sorted/read independently — a finding without a note shows "–"
 there. Open it by double-clicking it in your file browser, or
-automatically with `--open` below. Already fetched articles are cached
+automatically with `--open`, which also prints a console message when
+it starts and finishes opening the report in your default browser.
+Already fetched articles are cached
 in `cache.json` so a repeated
 run is faster (bypass the cache with `--no-cache`, e.g. if articles have
-changed since — deleting `cache.json` has the same effect). Writes to
+changed since — deleting `cache.json` has the same effect); the console
+status line accordingly only mentions the cache when it's actually in
+use, never while `--no-cache` is active. Writes to
 `cache.json` are atomic, so running two scans at the same time won't
 corrupt it; if it's ever found corrupted anyway (e.g. an interrupted
 write from an older version of this tool), it's treated as empty and
@@ -259,8 +263,10 @@ python main.py --check https://de.wikipedia.org/wiki/Usain_Bolt
 python main.py --check my_draft.wikitext
 ```
 
-Findings are printed to the console, followed by the same severity
-breakdown as the report (omitted when there are no findings). A finding
+The console first confirms which target is being checked (e.g.
+`Checking 'Usain Bolt' ...`), then prints its findings, followed by the
+same severity breakdown as the report (omitted when there are no
+findings). A finding
 with a note (see the Note column above) shows it inline as
 `(Note: ...)` after the message, since there's no separate column on
 the console.
