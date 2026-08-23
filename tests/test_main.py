@@ -157,6 +157,19 @@ def test_sanitize_console_text_leaves_plain_text_unchanged():
 
 
 # ---------------------------------------------------------------------
+# _cache_status_note
+# ---------------------------------------------------------------------
+
+
+def test_cache_status_note_when_cache_enabled():
+    assert main._cache_status_note(True) == " (from cache where possible)"
+
+
+def test_cache_status_note_when_cache_disabled():
+    assert main._cache_status_note(False) == ""
+
+
+# ---------------------------------------------------------------------
 # _format_severity_summary
 # ---------------------------------------------------------------------
 
@@ -347,6 +360,18 @@ def test_run_check_local_wikitext_file(monkeypatch, capsys):
     assert "No findings." in out
 
 
+def test_run_check_prints_current_action_message(monkeypatch, capsys):
+    monkeypatch.setattr(
+        main.fetch, "templates_exist", lambda session, titles: {t: True for t in titles}
+    )
+    path = os.path.join(FIXTURES_DIR, "usain_bolt.wikitext")
+
+    main.run_check(path)
+
+    out = capsys.readouterr().out
+    assert f"Checking '{path}' ..." in out
+
+
 def test_run_check_resolves_article_url_to_title_before_fetching(monkeypatch):
     seen = {}
 
@@ -520,3 +545,109 @@ def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
     assert result == 0
     out = capsys.readouterr().out
     assert "Total findings: 2 (Very high: 0, High: 1, Medium: 0, Low: 1)" in out
+
+
+# ---------------------------------------------------------------------
+# run_scan: console-output consistency (issue #15)
+# ---------------------------------------------------------------------
+
+
+def _stub_empty_scan(monkeypatch):
+    """Mocks fetch.py so run_scan completes instantly against an empty
+    article list, for tests that only care about console output."""
+    monkeypatch.setattr(main.fetch, "get_session", lambda: object())
+    monkeypatch.setattr(
+        main.fetch, "list_pages_using_template", lambda session, limit=None: []
+    )
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_all_with_cache",
+        lambda session, titles, use_cache=True: {},
+    )
+    monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
+
+
+def test_run_scan_no_cache_hint_when_cache_disabled(monkeypatch, capsys, tmp_path):
+    _stub_empty_scan(monkeypatch)
+
+    result = main.run_scan(output=str(tmp_path / "report.html"), use_cache=False)
+
+    assert result == 0
+    assert "from cache where possible" not in capsys.readouterr().out
+
+
+def test_run_scan_shows_cache_hint_when_cache_enabled(monkeypatch, capsys, tmp_path):
+    _stub_empty_scan(monkeypatch)
+
+    result = main.run_scan(output=str(tmp_path / "report.html"), use_cache=True)
+
+    assert result == 0
+    assert "from cache where possible" in capsys.readouterr().out
+
+
+def test_run_scan_prints_writing_report_message(monkeypatch, capsys, tmp_path):
+    _stub_empty_scan(monkeypatch)
+    output = tmp_path / "report.html"
+
+    result = main.run_scan(output=str(output))
+
+    assert result == 0
+    assert (
+        f"Writing report to '{os.path.abspath(str(output))}'" in capsys.readouterr().out
+    )
+
+
+def test_run_scan_open_prints_opening_and_opened_messages(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_empty_scan(monkeypatch)
+    opened_urls: list[str] = []
+    monkeypatch.setattr(main.webbrowser, "open", opened_urls.append)
+    output = tmp_path / "report.html"
+
+    result = main.run_scan(output=str(output), open_output=True)
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "Opening report in your default browser" in out
+    assert "Opened report." in out
+    assert opened_urls == [f"file://{os.path.abspath(str(output))}"]
+
+
+def test_run_scan_no_open_messages_or_browser_call_when_open_output_false(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_empty_scan(monkeypatch)
+    opened_urls: list[str] = []
+    monkeypatch.setattr(main.webbrowser, "open", opened_urls.append)
+
+    result = main.run_scan(output=str(tmp_path / "report.html"), open_output=False)
+
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "Opening report" not in out
+    assert "Opened report." not in out
+    assert opened_urls == []
+
+
+def test_run_scan_done_line_ends_with_newline_before_next_output(
+    monkeypatch, capsys, tmp_path
+):
+    # The "Done." line must be its own line, cleanly separated from
+    # whatever prints next (here: the --open messages) rather than
+    # running together on one line.
+    _stub_empty_scan(monkeypatch)
+    monkeypatch.setattr(main.webbrowser, "open", lambda url: True)
+
+    result = main.run_scan(output=str(tmp_path / "report.html"), open_output=True)
+
+    assert result == 0
+    lines = capsys.readouterr().out.splitlines()
+    done_index = next(i for i, line in enumerate(lines) if line.startswith("Done."))
+    opening_index = next(
+        i for i, line in enumerate(lines) if line.startswith("Opening report")
+    )
+    # "Done." must be a self-contained line, with a blank line before
+    # the next message rather than the two running together.
+    assert lines[done_index + 1] == ""
+    assert opening_index > done_index + 1

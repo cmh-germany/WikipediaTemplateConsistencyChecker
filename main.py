@@ -68,6 +68,15 @@ def _check_output_path(path):
     return None
 
 
+def _cache_status_note(use_cache: bool) -> str:
+    """Composes the "(from cache where possible)" hint shown while
+    loading article content, centralized here so every caller
+    advertises the cache status consistently -- in particular, so the
+    hint never appears when --no-cache (use_cache=False) disabled the
+    cache."""
+    return " (from cache where possible)" if use_cache else ""
+
+
 def _format_severity_summary(counts: dict[str, int]) -> str:
     """Formats a counts-by-severity dict (see rules.count_by_severity)
     as e.g. "Total findings: 12 (Very high: 2, High: 3, Medium: 5,
@@ -113,6 +122,8 @@ def run_check(target, session=None):
     prints its findings to the console. Returns a process exit code (0
     on success, 1 if the target/template couldn't be resolved)."""
     session = session or fetch.get_session()
+
+    print(f"Checking '{_sanitize_console_text(target)}' ...")
 
     if os.path.isfile(target):
         try:
@@ -179,7 +190,7 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
     titles = fetch.list_pages_using_template(session, limit=limit)
     print(f"{len(titles)} articles found.")
 
-    print("Loading wikitext and categories (from cache where possible) ...")
+    print(f"Loading wikitext and categories{_cache_status_note(use_cache)} ...")
     pages = fetch.fetch_all_with_cache(session, titles, use_cache=use_cache)
 
     print("Extracting infobox parameters ...")
@@ -214,21 +225,27 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
             discipline_exists=discipline_exists,
         )
 
+    output_path = os.path.abspath(output)
+    print(f"Writing report to '{output_path}' ...")
     try:
         report.generate_html_report(results, output, n_scanned=len(parsed))
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
         return 1
+
     n_with_findings = sum(1 for f in results.values() if f)
     all_findings = [finding for findings in results.values() for finding in findings]
     severity_summary = _format_severity_summary(rules.count_by_severity(all_findings))
-    output_path = os.path.abspath(output)
     print(
         f"\nDone. {n_with_findings} of {len(parsed)} articles have "
-        f"findings. {severity_summary} Report: {output_path}"
+        f"findings. {severity_summary} Report: {output_path}\n"
     )
+
     if open_output:
+        print(f"Opening report in your default browser: {output_path} ...")
         webbrowser.open(f"file://{output_path}")
+        print("Opened report.")
+
     return 0
 
 
