@@ -123,6 +123,8 @@ def run_check(target, session=None):
     on success, 1 if the target/template couldn't be resolved)."""
     session = session or fetch.get_session()
 
+    print(f"Checking '{_sanitize_console_text(target)}' ...")
+
     if os.path.isfile(target):
         try:
             with open(target, encoding="utf-8") as fh:
