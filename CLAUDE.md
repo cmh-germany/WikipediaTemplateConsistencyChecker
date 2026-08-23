@@ -162,10 +162,15 @@ genuinely doesn't apply.
   All commits for that issue happen on this branch.
 * Commit in small, focused, logically-independent steps rather than one
   large commit per task — each commit should represent one coherent change
-  that could be reviewed on its own.
+  that could be reviewed on its own. Split by logical change, not by file:
+  e.g. one commit per rule/behavior fixed, not one commit for "all the fixes"
+  plus one for "all the READMEs". Tests always get their own commit,
+  separate from the implementation they cover.
 * Write clear, descriptive commit messages in English: a concise summary
-  line (imperative mood, e.g. "Add medal-year range check"), and a body when
-  the *why* isn't obvious from the diff alone.
+  line (imperative mood, e.g. "Add medal-year range check"), and, when the
+  *why* isn't obvious from the diff alone, a body of **at most three bullet
+  points** — if it doesn't fit in three, the commit is probably doing too
+  much and should be split instead of the message padded out.
 * Don't mix formatting-only changes with behavioral changes in the same
   commit.
 
