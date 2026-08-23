@@ -461,25 +461,6 @@ alongside #23:
 
 
 
-
-<!-- ROADMAP -->
-## Roadmap
-
-- [ ] Support additional Wikipedia infobox templates, not just `Infobox Leichtathlet`
-- [ ] Support English-language template equivalents
-- [ ] Cross-language consistency checks (same athlete, different Wikipedia editions)
-- [ ] Rule presets/profiles, in addition to the low/medium/high/very-high classification
-- [ ] Suggested fixes for detected inconsistencies, not just a description
-- [x] Automated test suite (see [`tests/`](tests/) -- basic coverage, not exhaustive)
-- [ ] Additional consistency rules
-
-See the [open issues](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues)
-for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
 <!-- CONTRIBUTING -->
 ## Contributing
 
