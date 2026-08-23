@@ -225,15 +225,17 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
             discipline_exists=discipline_exists,
         )
 
+    output_path = os.path.abspath(output)
+    print(f"Writing report to '{output_path}' ...")
     try:
         report.generate_html_report(results, output, n_scanned=len(parsed))
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
         return 1
+
     n_with_findings = sum(1 for f in results.values() if f)
     all_findings = [finding for findings in results.values() for finding in findings]
     severity_summary = _format_severity_summary(rules.count_by_severity(all_findings))
-    output_path = os.path.abspath(output)
     print(
         f"\nDone. {n_with_findings} of {len(parsed)} articles have "
         f"findings. {severity_summary} Report: {output_path}"
