@@ -68,6 +68,15 @@ def _check_output_path(path):
     return None
 
 
+def _cache_status_note(use_cache: bool) -> str:
+    """Composes the "(from cache where possible)" hint shown while
+    loading article content, centralized here so every caller
+    advertises the cache status consistently -- in particular, so the
+    hint never appears when --no-cache (use_cache=False) disabled the
+    cache."""
+    return " (from cache where possible)" if use_cache else ""
+
+
 def _format_severity_summary(counts: dict[str, int]) -> str:
     """Formats a counts-by-severity dict (see rules.count_by_severity)
     as e.g. "Total findings: 12 (Very high: 2, High: 3, Medium: 5,
@@ -179,7 +188,7 @@ def run_scan(limit=None, output="report.html", use_cache=True, open_output=False
     titles = fetch.list_pages_using_template(session, limit=limit)
     print(f"{len(titles)} articles found.")
 
-    print("Loading wikitext and categories (from cache where possible) ...")
+    print(f"Loading wikitext and categories{_cache_status_note(use_cache)} ...")
     pages = fetch.fetch_all_with_cache(session, titles, use_cache=use_cache)
 
     print("Extracting infobox parameters ...")
