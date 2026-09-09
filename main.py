@@ -181,21 +181,23 @@ def run_check(target, session=None):
 
 
 def _warn_if_cache_stale(use_cache: bool, overwrite_cache: bool) -> None:
-    """Prints a stderr warning suggesting --overwrite-cache once
-    cache.json is fetch.CACHE_STALE_AGE_DAYS or more days old. Skipped
-    when the cache isn't actually being read (--no-cache) or is about to
-    be refreshed anyway (--overwrite-cache), since neither case leaves
-    stale data in play."""
+    """Prints a stderr warning suggesting --overwrite-cache once the
+    oldest entry still in the cache is fetch.CACHE_STALE_AGE_DAYS or
+    more days old (see fetch.cache_age_days() for why this is based on
+    per-entry fetch timestamps rather than cache.json's own file age).
+    Skipped when the cache isn't actually being read (--no-cache) or is
+    about to be refreshed anyway (--overwrite-cache), since neither case
+    leaves stale data in play."""
     if not use_cache or overwrite_cache:
         return
     age_days = fetch.cache_age_days()
     if age_days is None or age_days < fetch.CACHE_STALE_AGE_DAYS:
         return
     print(
-        f"Warning: cache.json is {age_days:.0f} days old "
-        f"(>= {fetch.CACHE_STALE_AGE_DAYS} days) and may contain outdated "
-        "article data. Re-run with --overwrite-cache to force a fresh "
-        "fetch from Wikipedia.",
+        f"Warning: cache.json's oldest cached article data is "
+        f"{age_days:.0f} days old (>= {fetch.CACHE_STALE_AGE_DAYS} days) "
+        "and may be outdated. Re-run with --overwrite-cache to force a "
+        "fresh fetch from Wikipedia.",
         file=sys.stderr,
     )
 
