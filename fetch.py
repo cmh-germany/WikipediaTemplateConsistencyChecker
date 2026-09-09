@@ -26,6 +26,10 @@ TEMPLATE_NAME = "Vorlage:Infobox Leichtathlet"
 
 CACHE_FILE = os.path.join(os.path.dirname(__file__), "cache.json")
 
+# Age at which cache.json is considered stale enough to warn about (see
+# cache_age_days()).
+CACHE_STALE_AGE_DAYS = 30
+
 # Short delay between batch requests to avoid overloading the API.
 REQUEST_DELAY_SECONDS = 0.5
 
@@ -216,6 +220,21 @@ def load_cache():
         return {}
 
 
+def cache_age_days() -> float | None:
+    """Returns how many days ago cache.json was last written, or None if
+    it doesn't exist yet. Uses the file's modification time rather than
+    its creation time: creation time isn't reliably available across
+    platforms (e.g. most Linux filesystems don't track it at all), and
+    modification time is what actually matters here -- it reflects when
+    the cached data was last refreshed, not when the file was first
+    created."""
+    try:
+        mtime = os.path.getmtime(CACHE_FILE)
+    except OSError:
+        return None
+    return (time.time() - mtime) / 86400
+
+
 def save_cache(cache):
     """Writes cache.json atomically: the new content is written to a
     temporary file in the same directory and then moved into place with
@@ -236,12 +255,16 @@ def save_cache(cache):
         raise
 
 
-def fetch_all_with_cache(session, titles, use_cache=True):
+def fetch_all_with_cache(session, titles, use_cache=True, overwrite_cache=False):
     """Like fetch_pages_content_and_categories, but uses a local cache
     for articles already fetched before (keyed by title, without a
-    revision check -- delete cache.json to force a full refresh)."""
+    revision check -- delete cache.json, or pass overwrite_cache=True, to
+    force a full refresh). overwrite_cache=True re-fetches every title in
+    `titles` from Wikipedia regardless of what's already cached for it,
+    then writes the fresh results back into the cache -- unlike
+    use_cache=False, which also skips the cache but never saves to it."""
     cache = load_cache() if use_cache else {}
-    missing = [t for t in titles if t not in cache]
+    missing = list(titles) if overwrite_cache else [t for t in titles if t not in cache]
 
     if missing:
         fresh = fetch_pages_content_and_categories(session, missing)
