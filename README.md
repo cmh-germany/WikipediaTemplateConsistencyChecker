@@ -231,10 +231,16 @@ refresh outdated entries instead of skipping the cache outright, use
 `--overwrite-cache`: it still fetches every scanned article fresh from
 Wikipedia, like `--no-cache`, but — unlike `--no-cache` — writes the
 fresh results back into `cache.json` so later runs benefit from them
-too. Once `cache.json` is 30 or more days old, the console prints a
-warning suggesting `--overwrite-cache` before the scan starts; this is
-only a heads-up; a stale cache still works normally otherwise and
-nothing is refreshed automatically. Writes to
+too. Each cached article stores its own fetch timestamp, so once the
+*oldest* entry still in `cache.json` is 30 or more days old, the console
+prints a warning suggesting `--overwrite-cache` before the scan starts
+(this is only a heads-up; a stale cache still works normally otherwise
+and nothing is refreshed automatically). Staleness is tracked this way,
+rather than from `cache.json`'s own file modification time, because a
+single scan run that only needs to fetch a handful of newly-published
+articles rewrites the whole file — which would otherwise make months-old
+cached data look freshly refreshed just because the file itself was
+recently touched. Writes to
 `cache.json` are atomic, so running two scans at the same time won't
 corrupt it; if it's ever found corrupted anyway (e.g. an interrupted
 write from an older version of this tool), it's treated as empty and
