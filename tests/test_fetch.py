@@ -1,12 +1,15 @@
 """Tests for fetch.py: the local disk cache (load_cache/save_cache) --
 corruption recovery on load and atomic, non-interleaving writes on save
 (see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/7)
--- and fetch_pages_content_and_categories's per-batch progress output
-(see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/9)."""
+-- fetch_pages_content_and_categories's per-batch progress output
+(see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/9)
+-- and cache age detection plus fetch_all_with_cache's overwrite_cache
+option (see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/20)."""
 
 import glob
 import json
 import os
+import time
 
 import pytest
 
@@ -128,6 +131,127 @@ def test_fetch_pages_prints_nothing_for_empty_title_list(monkeypatch, capsys):
 
     assert result == {}
     assert capsys.readouterr().out == ""
+
+
+# ---------------------------------------------------------------------
+# cache_age_days (issue #20)
+# ---------------------------------------------------------------------
+
+
+def test_cache_age_days_returns_none_when_file_absent(cache_file):
+    assert fetch.cache_age_days() is None
+
+
+def test_cache_age_days_reflects_modification_time(cache_file):
+    fetch.save_cache({"a": 1})
+    thirty_five_days_ago = time.time() - 35 * 86400
+    os.utime(cache_file, (thirty_five_days_ago, thirty_five_days_ago))
+
+    age = fetch.cache_age_days()
+
+    assert age is not None
+    assert 34.9 < age < 35.1
+
+
+def test_cache_age_days_near_zero_for_freshly_saved_cache(cache_file):
+    fetch.save_cache({"a": 1})
+    age = fetch.cache_age_days()
+    assert age is not None
+    assert age < 0.01
+
+
+# ---------------------------------------------------------------------
+# fetch_all_with_cache (issue #20: overwrite_cache)
+# ---------------------------------------------------------------------
+
+
+def _fake_fetch_pages(calls: list[list[str]]):
+    """Stand-in for fetch_pages_content_and_categories: records the
+    titles it was asked to fetch and returns placeholder content for
+    each, so tests can assert exactly what fetch_all_with_cache decided
+    was "missing" without any real network access."""
+
+    def _fake(session, titles):
+        calls.append(list(titles))
+        return {
+            t: {"wikitext": f"fresh wikitext for {t}", "categories": []} for t in titles
+        }
+
+    return _fake
+
+
+def test_fetch_all_with_cache_only_fetches_missing_titles(monkeypatch, cache_file):
+    fetch.save_cache({"Cached Athlete": {"wikitext": "old", "categories": []}})
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages(calls)
+    )
+
+    result = fetch.fetch_all_with_cache(
+        object(), ["Cached Athlete", "New Athlete"], use_cache=True
+    )
+
+    assert calls == [["New Athlete"]]
+    assert result["Cached Athlete"]["wikitext"] == "old"
+    assert result["New Athlete"]["wikitext"] == "fresh wikitext for New Athlete"
+
+
+def test_fetch_all_with_cache_overwrite_cache_refetches_everything(
+    monkeypatch, cache_file
+):
+    fetch.save_cache({"Cached Athlete": {"wikitext": "old", "categories": []}})
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages(calls)
+    )
+
+    result = fetch.fetch_all_with_cache(
+        object(), ["Cached Athlete"], use_cache=True, overwrite_cache=True
+    )
+
+    assert calls == [["Cached Athlete"]]
+    assert result["Cached Athlete"]["wikitext"] == "fresh wikitext for Cached Athlete"
+
+
+def test_fetch_all_with_cache_overwrite_cache_saves_refreshed_entries(
+    monkeypatch, cache_file
+):
+    fetch.save_cache({"Cached Athlete": {"wikitext": "old", "categories": []}})
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages([])
+    )
+
+    fetch.fetch_all_with_cache(
+        object(), ["Cached Athlete"], use_cache=True, overwrite_cache=True
+    )
+
+    assert (
+        fetch.load_cache()["Cached Athlete"]["wikitext"]
+        == "fresh wikitext for Cached Athlete"
+    )
+
+
+def test_fetch_all_with_cache_overwrite_cache_preserves_untouched_entries(
+    monkeypatch, cache_file
+):
+    """A --limit run with --overwrite-cache must not drop cache entries
+    for articles outside the current scan -- only the titles actually
+    requested this run should be refreshed."""
+    fetch.save_cache(
+        {
+            "Cached Athlete": {"wikitext": "old", "categories": []},
+            "Untouched Athlete": {"wikitext": "keep me", "categories": []},
+        }
+    )
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages([])
+    )
+
+    fetch.fetch_all_with_cache(
+        object(), ["Cached Athlete"], use_cache=True, overwrite_cache=True
+    )
+
+    assert fetch.load_cache()["Untouched Athlete"]["wikitext"] == "keep me"
 
 
 def test_save_cache_is_atomic_and_leaves_valid_json_on_repeated_writes(cache_file):

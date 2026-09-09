@@ -170,6 +170,79 @@ def test_cache_status_note_when_cache_disabled():
 
 
 # ---------------------------------------------------------------------
+# _warn_if_cache_stale (issue #20)
+# ---------------------------------------------------------------------
+
+
+def test_warn_if_cache_stale_warns_when_cache_old(monkeypatch, capsys):
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 45)
+    main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
+    err = capsys.readouterr().err
+    assert "45 days old" in err
+    assert "--overwrite-cache" in err
+
+
+def test_warn_if_cache_stale_silent_when_cache_fresh(monkeypatch, capsys):
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 5)
+    main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
+    assert capsys.readouterr().err == ""
+
+
+def test_warn_if_cache_stale_silent_when_no_cache_file_yet(monkeypatch, capsys):
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: None)
+    main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
+    assert capsys.readouterr().err == ""
+
+
+def test_warn_if_cache_stale_silent_when_cache_disabled(monkeypatch, capsys):
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 45)
+    main._warn_if_cache_stale(use_cache=False, overwrite_cache=False)
+    assert capsys.readouterr().err == ""
+
+
+def test_warn_if_cache_stale_silent_when_overwriting_cache(monkeypatch, capsys):
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 45)
+    main._warn_if_cache_stale(use_cache=True, overwrite_cache=True)
+    assert capsys.readouterr().err == ""
+
+
+def test_run_scan_prints_stale_cache_warning(monkeypatch, capsys, tmp_path):
+    _stub_empty_scan(monkeypatch)
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 31)
+
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+
+    assert result == 0
+    assert "cache.json is 31 days old" in capsys.readouterr().err
+
+
+def test_run_scan_overwrite_cache_skips_stale_warning(monkeypatch, capsys, tmp_path):
+    _stub_empty_scan(monkeypatch)
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 90)
+
+    result = main.run_scan(output=str(tmp_path / "report.html"), overwrite_cache=True)
+
+    assert result == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_run_scan_passes_overwrite_cache_to_fetch(monkeypatch, tmp_path):
+    _stub_empty_scan(monkeypatch)
+    seen: dict[str, bool] = {}
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_all_with_cache",
+        lambda session, titles, use_cache=True, overwrite_cache=False: (
+            seen.update(overwrite_cache=overwrite_cache) or {}
+        ),
+    )
+
+    main.run_scan(output=str(tmp_path / "report.html"), overwrite_cache=True)
+
+    assert seen["overwrite_cache"] is True
+
+
+# ---------------------------------------------------------------------
 # _format_severity_summary
 # ---------------------------------------------------------------------
 
@@ -287,6 +360,7 @@ def test_scan_invokes_run_scan_with_defaults(monkeypatch):
         "output": "report.html",
         "use_cache": True,
         "open_output": False,
+        "overwrite_cache": False,
     }
 
 
@@ -313,7 +387,16 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
         "output": "athletes.html",
         "use_cache": False,
         "open_output": True,
+        "overwrite_cache": False,
     }
+
+
+def test_scan_passes_through_overwrite_cache(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--overwrite-cache"])
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
+    main.main()
+    assert calls["overwrite_cache"] is True
 
 
 def test_check_invokes_run_check_with_target(monkeypatch):
@@ -499,7 +582,7 @@ def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
     monkeypatch.setattr(
         main.fetch,
         "fetch_all_with_cache",
-        lambda session, titles, use_cache=True: {},
+        lambda session, titles, use_cache=True, overwrite_cache=False: {},
     )
     monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
 
@@ -524,7 +607,7 @@ def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(
         main.fetch,
         "fetch_all_with_cache",
-        lambda session, titles, use_cache=True: {
+        lambda session, titles, use_cache=True, overwrite_cache=False: {
             "Dead Athlete": {
                 # status='a' (active) with a death date given -- a
                 # "high" severity contradiction
@@ -562,7 +645,7 @@ def _stub_empty_scan(monkeypatch):
     monkeypatch.setattr(
         main.fetch,
         "fetch_all_with_cache",
-        lambda session, titles, use_cache=True: {},
+        lambda session, titles, use_cache=True, overwrite_cache=False: {},
     )
     monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
 
