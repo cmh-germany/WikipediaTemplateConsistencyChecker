@@ -26,6 +26,10 @@ TEMPLATE_NAME = "Vorlage:Infobox Leichtathlet"
 
 CACHE_FILE = os.path.join(os.path.dirname(__file__), "cache.json")
 
+# Age at which cache.json is considered stale enough to warn about (see
+# cache_age_days()).
+CACHE_STALE_AGE_DAYS = 30
+
 # Short delay between batch requests to avoid overloading the API.
 REQUEST_DELAY_SECONDS = 0.5
 
@@ -216,6 +220,52 @@ def load_cache():
         return {}
 
 
+def cache_age_days() -> float | None:
+    """Returns how many days ago the oldest entry in the cache was
+    fetched, or None if the cache is empty/absent, or none of its
+    entries carry a "fetched_at" timestamp (a cache.json written by a
+    version of this tool that predates this field).
+
+    Deliberately does *not* use cache.json's filesystem modification
+    time: fetch_all_with_cache() rewrites the whole file (via
+    save_cache()) whenever even a single new title needs fetching, so a
+    handful of newly-published articles would reset the file's mtime to
+    "now" while thousands of untouched entries are still months old --
+    the file would look fresh when almost none of its data is. mtime
+    also isn't a signal this tool controls: a git checkout, an editor,
+    or a sync client touching the file wouldn't mean the underlying
+    Wikipedia data was actually refreshed. Each entry's own
+    "fetched_at", stamped only when that specific title is (re)fetched,
+    doesn't have either problem."""
+    cache = load_cache()
+    fetch_times = [
+        entry["fetched_at"]
+        for entry in cache.values()
+        if isinstance(entry, dict) and "fetched_at" in entry
+    ]
+    if not fetch_times:
+        return None
+    return (time.time() - min(fetch_times)) / 86400
+
+
+def cache_has_untracked_entries() -> bool:
+    """Returns True if cache.json has at least one entry without a
+    "fetched_at" timestamp -- written by a version of this tool older
+    than this feature (e.g. an existing cache.json from before this
+    change, which needs no manual migration or deletion: entries are
+    upgraded in place, lazily, the next time each one is actually
+    (re)fetched). Such an entry's real age is unknown and could be
+    arbitrarily old, so its mere presence is reason enough to suggest a
+    refresh -- regardless of what cache_age_days() reports for entries
+    that *do* have a timestamp, which would otherwise ignore it
+    entirely and never warn about it."""
+    cache = load_cache()
+    return any(
+        not (isinstance(entry, dict) and "fetched_at" in entry)
+        for entry in cache.values()
+    )
+
+
 def save_cache(cache):
     """Writes cache.json atomically: the new content is written to a
     temporary file in the same directory and then moved into place with
@@ -236,15 +286,25 @@ def save_cache(cache):
         raise
 
 
-def fetch_all_with_cache(session, titles, use_cache=True):
+def fetch_all_with_cache(session, titles, use_cache=True, overwrite_cache=False):
     """Like fetch_pages_content_and_categories, but uses a local cache
     for articles already fetched before (keyed by title, without a
-    revision check -- delete cache.json to force a full refresh)."""
+    revision check -- delete cache.json, or pass overwrite_cache=True, to
+    force a full refresh). overwrite_cache=True re-fetches every title in
+    `titles` from Wikipedia regardless of what's already cached for it,
+    then writes the fresh results back into the cache -- unlike
+    use_cache=False, which also skips the cache but never saves to it.
+    Every freshly (re)fetched entry is stamped with a "fetched_at" epoch
+    timestamp (see cache_age_days()); entries reused from the existing
+    cache keep whatever timestamp they already had."""
     cache = load_cache() if use_cache else {}
-    missing = [t for t in titles if t not in cache]
+    missing = list(titles) if overwrite_cache else [t for t in titles if t not in cache]
 
     if missing:
         fresh = fetch_pages_content_and_categories(session, missing)
+        fetched_at = time.time()
+        for entry in fresh.values():
+            entry["fetched_at"] = fetched_at
         cache.update(fresh)
         if use_cache:
             save_cache(cache)

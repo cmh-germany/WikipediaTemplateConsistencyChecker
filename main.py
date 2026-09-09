@@ -2,6 +2,7 @@
 
 Two modes:
   python main.py --scan [--limit N] [--output report.html] [--no-cache]
+                  [--overwrite-cache]
       Scans all Wikipedia articles that embed the template and
       generates an HTML report.
 
@@ -179,19 +180,65 @@ def run_check(target, session=None):
     return 0
 
 
-def run_scan(limit=None, output="report.html", use_cache=True, open_output=False):
+def _warn_if_cache_stale(use_cache: bool, overwrite_cache: bool) -> None:
+    """Prints a stderr warning suggesting --overwrite-cache once the
+    oldest entry still in the cache is fetch.CACHE_STALE_AGE_DAYS or
+    more days old (see fetch.cache_age_days() for why this is based on
+    per-entry fetch timestamps rather than cache.json's own file age).
+    A cache.json left over from a version of this tool older than that
+    per-entry tracking has entries with no timestamp at all -- their age
+    is unknown rather than 0, so that's flagged with its own message
+    instead of being silently treated as fresh forever (see
+    fetch.cache_has_untracked_entries()). Skipped entirely when the
+    cache isn't actually being read (--no-cache) or is about to be
+    refreshed anyway (--overwrite-cache), since neither case leaves
+    stale data in play."""
+    if not use_cache or overwrite_cache:
+        return
+    if fetch.cache_has_untracked_entries():
+        print(
+            "Warning: cache.json has entries from an older version of "
+            "this tool that don't record when they were fetched, so "
+            "their age can't be checked and they may be outdated. "
+            "Re-run with --overwrite-cache to refresh them.",
+            file=sys.stderr,
+        )
+        return
+    age_days = fetch.cache_age_days()
+    if age_days is None or age_days < fetch.CACHE_STALE_AGE_DAYS:
+        return
+    print(
+        f"Warning: cache.json's oldest cached article data is "
+        f"{age_days:.0f} days old (>= {fetch.CACHE_STALE_AGE_DAYS} days) "
+        "and may be outdated. Re-run with --overwrite-cache to force a "
+        "fresh fetch from Wikipedia.",
+        file=sys.stderr,
+    )
+
+
+def run_scan(
+    limit=None,
+    output="report.html",
+    use_cache=True,
+    open_output=False,
+    overwrite_cache=False,
+):
     """Fetches all articles embedding the template, runs the rule checks
     across the whole corpus, and writes the HTML report. Returns a
     process exit code (0 on success, 1 if the report couldn't be
     written)."""
     session = fetch.get_session()
 
+    _warn_if_cache_stale(use_cache, overwrite_cache)
+
     print("Fetching articles that embed the template ...")
     titles = fetch.list_pages_using_template(session, limit=limit)
     print(f"{len(titles)} articles found.")
 
     print(f"Loading wikitext and categories{_cache_status_note(use_cache)} ...")
-    pages = fetch.fetch_all_with_cache(session, titles, use_cache=use_cache)
+    pages = fetch.fetch_all_with_cache(
+        session, titles, use_cache=use_cache, overwrite_cache=overwrite_cache
+    )
 
     print("Extracting infobox parameters ...")
     parsed = {}
@@ -288,6 +335,14 @@ def main():
         help="Ignore the local cache (cache.json) and reload everything",
     )
     parser.add_argument(
+        "--overwrite-cache",
+        action="store_true",
+        help="Force a fresh fetch from Wikipedia for every scanned article, "
+        "overwriting their entries in the local cache (cache.json) even if "
+        "already present. Use this to refresh outdated cached data -- the "
+        "tool suggests it automatically once the cache is 30+ days old",
+    )
+    parser.add_argument(
         "--open",
         action="store_true",
         help="Open the generated HTML report in the default browser "
@@ -314,6 +369,7 @@ def main():
         output=args.output,
         use_cache=not args.no_cache,
         open_output=args.open,
+        overwrite_cache=args.overwrite_cache,
     )
 
 
