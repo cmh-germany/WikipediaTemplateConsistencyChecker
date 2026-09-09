@@ -174,7 +174,18 @@ def test_cache_status_note_when_cache_disabled():
 # ---------------------------------------------------------------------
 
 
+def _mock_no_untracked_entries(monkeypatch):
+    """Most of these tests are only exercising the days-based branch of
+    _warn_if_cache_stale, so the untracked-entries check (see
+    test_warn_if_cache_stale_warns_about_untracked_entries below) is
+    mocked out of the way -- otherwise it would fall through to the
+    real fetch.cache_has_untracked_entries(), reading whatever
+    cache.json happens to exist on this machine."""
+    monkeypatch.setattr(main.fetch, "cache_has_untracked_entries", lambda: False)
+
+
 def test_warn_if_cache_stale_warns_when_cache_old(monkeypatch, capsys):
+    _mock_no_untracked_entries(monkeypatch)
     monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 45)
     main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
     err = capsys.readouterr().err
@@ -184,27 +195,51 @@ def test_warn_if_cache_stale_warns_when_cache_old(monkeypatch, capsys):
 
 
 def test_warn_if_cache_stale_silent_when_cache_fresh(monkeypatch, capsys):
+    _mock_no_untracked_entries(monkeypatch)
     monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 5)
     main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
     assert capsys.readouterr().err == ""
 
 
 def test_warn_if_cache_stale_silent_when_no_cache_file_yet(monkeypatch, capsys):
+    _mock_no_untracked_entries(monkeypatch)
     monkeypatch.setattr(main.fetch, "cache_age_days", lambda: None)
     main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
     assert capsys.readouterr().err == ""
 
 
 def test_warn_if_cache_stale_silent_when_cache_disabled(monkeypatch, capsys):
-    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 45)
+    # use_cache=False must short-circuit before either fetch.py call --
+    # cache_age_days/cache_has_untracked_entries are deliberately left
+    # unmocked so a real (accidental) call would fail loudly.
     main._warn_if_cache_stale(use_cache=False, overwrite_cache=False)
     assert capsys.readouterr().err == ""
 
 
 def test_warn_if_cache_stale_silent_when_overwriting_cache(monkeypatch, capsys):
-    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: 45)
+    # overwrite_cache=True must short-circuit before either fetch.py
+    # call, for the same reason as above.
     main._warn_if_cache_stale(use_cache=True, overwrite_cache=True)
     assert capsys.readouterr().err == ""
+
+
+def test_warn_if_cache_stale_warns_about_untracked_entries(monkeypatch, capsys):
+    # A cache.json from before per-entry fetch timestamps existed: its
+    # age is unknown, not "fresh" -- must warn regardless of what
+    # cache_age_days() would report, and must not even call it (an
+    # untracked cache has no reliable "oldest timestamp" to report).
+    monkeypatch.setattr(main.fetch, "cache_has_untracked_entries", lambda: True)
+    monkeypatch.setattr(
+        main.fetch,
+        "cache_age_days",
+        lambda: (_ for _ in ()).throw(AssertionError("should not be called")),
+    )
+
+    main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
+
+    err = capsys.readouterr().err
+    assert "older version" in err
+    assert "--overwrite-cache" in err
 
 
 def test_run_scan_prints_stale_cache_warning(monkeypatch, capsys, tmp_path):
@@ -225,6 +260,19 @@ def test_run_scan_overwrite_cache_skips_stale_warning(monkeypatch, capsys, tmp_p
 
     assert result == 0
     assert capsys.readouterr().err == ""
+
+
+def test_run_scan_prints_untracked_cache_entries_warning(monkeypatch, capsys, tmp_path):
+    # e.g. a cache.json left over from before per-entry fetch timestamps
+    # existed (see issue #20 discussion) -- must warn even though
+    # cache_age_days() alone would find nothing to report.
+    _stub_empty_scan(monkeypatch)
+    monkeypatch.setattr(main.fetch, "cache_has_untracked_entries", lambda: True)
+
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+
+    assert result == 0
+    assert "older version" in capsys.readouterr().err
 
 
 def test_run_scan_passes_overwrite_cache_to_fetch(monkeypatch, tmp_path):
@@ -586,6 +634,8 @@ def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
         lambda session, titles, use_cache=True, overwrite_cache=False: {},
     )
     monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: None)
+    monkeypatch.setattr(main.fetch, "cache_has_untracked_entries", lambda: False)
 
     def raise_permission_error(*args, **kwargs):
         raise PermissionError(13, "Permission denied")
@@ -623,6 +673,8 @@ def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
         },
     )
     monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: None)
+    monkeypatch.setattr(main.fetch, "cache_has_untracked_entries", lambda: False)
 
     result = main.run_scan(output=str(tmp_path / "report.html"))
 
@@ -638,7 +690,10 @@ def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
 
 def _stub_empty_scan(monkeypatch):
     """Mocks fetch.py so run_scan completes instantly against an empty
-    article list, for tests that only care about console output."""
+    article list, for tests that only care about console output.
+    Includes cache_age_days/cache_has_untracked_entries so tests don't
+    fall through to the real implementations -- which would read this
+    machine's actual cache.json (if any) instead of being isolated."""
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
     monkeypatch.setattr(
         main.fetch, "list_pages_using_template", lambda session, limit=None: []
@@ -649,6 +704,8 @@ def _stub_empty_scan(monkeypatch):
         lambda session, titles, use_cache=True, overwrite_cache=False: {},
     )
     monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: None)
+    monkeypatch.setattr(main.fetch, "cache_has_untracked_entries", lambda: False)
 
 
 def test_run_scan_no_cache_hint_when_cache_disabled(monkeypatch, capsys, tmp_path):

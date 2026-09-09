@@ -214,6 +214,67 @@ def test_cache_age_days_ignores_file_modification_time(cache_file):
 
 
 # ---------------------------------------------------------------------
+# cache_has_untracked_entries (issue #20: migrating a pre-existing
+# cache.json from before per-entry fetch timestamps existed)
+# ---------------------------------------------------------------------
+
+
+def test_cache_has_untracked_entries_false_when_cache_absent(cache_file):
+    assert fetch.cache_has_untracked_entries() is False
+
+
+def test_cache_has_untracked_entries_false_when_all_entries_tracked(cache_file):
+    fetch.save_cache(
+        {"Athlete": {"wikitext": "...", "categories": [], "fetched_at": time.time()}}
+    )
+    assert fetch.cache_has_untracked_entries() is False
+
+
+def test_cache_has_untracked_entries_true_for_pre_migration_cache(cache_file):
+    # e.g. a cache.json written by a version of this tool before
+    # "fetched_at" was introduced.
+    fetch.save_cache({"Athlete": {"wikitext": "...", "categories": []}})
+    assert fetch.cache_has_untracked_entries() is True
+
+
+def test_cache_has_untracked_entries_true_for_partially_migrated_cache(cache_file):
+    # A mix of a legacy, untimestamped entry and a freshly (re)fetched
+    # one -- e.g. right after upgrading, before a full --overwrite-cache
+    # run has touched every title.
+    fetch.save_cache(
+        {
+            "Legacy Athlete": {"wikitext": "...", "categories": []},
+            "Fresh Athlete": {
+                "wikitext": "...",
+                "categories": [],
+                "fetched_at": time.time(),
+            },
+        }
+    )
+    assert fetch.cache_has_untracked_entries() is True
+
+
+def test_fetch_all_with_cache_migrates_legacy_entry_when_refetched(
+    monkeypatch, cache_file
+):
+    # An untimestamped legacy entry only becomes tracked once it's
+    # actually (re)fetched -- reusing it as-is from the cache (the
+    # normal, non-overwrite path) must not touch it, but overwrite_cache
+    # explicitly re-fetching it does.
+    fetch.save_cache({"Legacy Athlete": {"wikitext": "old", "categories": []}})
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages([])
+    )
+
+    fetch.fetch_all_with_cache(
+        object(), ["Legacy Athlete"], use_cache=True, overwrite_cache=True
+    )
+
+    assert "fetched_at" in fetch.load_cache()["Legacy Athlete"]
+    assert fetch.cache_has_untracked_entries() is False
+
+
+# ---------------------------------------------------------------------
 # fetch_all_with_cache (issue #20: overwrite_cache)
 # ---------------------------------------------------------------------
 
