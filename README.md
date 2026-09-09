@@ -223,10 +223,18 @@ automatically with `--open`, which also prints a console message when
 it starts and finishes opening the report in your default browser.
 Already fetched articles are cached
 in `cache.json` so a repeated
-run is faster (bypass the cache with `--no-cache`, e.g. if articles have
-changed since — deleting `cache.json` has the same effect); the console
-status line accordingly only mentions the cache when it's actually in
-use, never while `--no-cache` is active. Writes to
+run is faster (bypass the cache for the current run with `--no-cache`,
+e.g. if articles have changed since — deleting `cache.json` has the same
+effect); the console status line accordingly only mentions the cache
+when it's actually in use, never while `--no-cache` is active. To
+refresh outdated entries instead of skipping the cache outright, use
+`--overwrite-cache`: it still fetches every scanned article fresh from
+Wikipedia, like `--no-cache`, but — unlike `--no-cache` — writes the
+fresh results back into `cache.json` so later runs benefit from them
+too. Once `cache.json` is 30 or more days old, the console prints a
+warning suggesting `--overwrite-cache` before the scan starts; this is
+only a heads-up; a stale cache still works normally otherwise and
+nothing is refreshed automatically. Writes to
 `cache.json` are atomic, so running two scans at the same time won't
 corrupt it; if it's ever found corrupted anyway (e.g. an interrupted
 write from an older version of this tool), it's treated as empty and
@@ -253,6 +261,7 @@ appearing to hang.
 python main.py --scan --limit 50     # only scan the first 50 articles
 python main.py --scan --open         # open the report when the scan finishes
 python main.py --scan --output athletes.html   # custom report file name (default: report.html)
+python main.py --scan --overwrite-cache   # refresh every scanned article's cache entry
 ```
 
 Check a single article or a local draft instead:
@@ -320,8 +329,8 @@ hand-crafted edge cases, but does not make any network calls itself
 (all `fetch.py` calls are mocked). It's basic coverage -- organized so
 every infobox field is exercised by at least one test rather than
 every individual rule, and so every CLI flag (`--scan`, `--check`,
-`--limit`, `--output`, `--no-cache`, `--open`) is exercised at least
-once -- rather than an exhaustive suite.
+`--limit`, `--output`, `--no-cache`, `--overwrite-cache`, `--open`) is
+exercised at least once -- rather than an exhaustive suite.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -370,6 +379,7 @@ once -- rather than an exhaustive suite.
 
 * `fetch.py` -- access to the MediaWiki API (article list, wikitext,
   categories, existence check for nation templates), with a local cache
+  and age tracking for that cache
 * `parse.py` -- extracts the infobox parameters from the wikitext
   (`mwparserfromhell`) and parses (possibly incomplete) date values
 * `rules.py` -- the rule set
