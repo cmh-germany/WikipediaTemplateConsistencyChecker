@@ -185,10 +185,24 @@ def _warn_if_cache_stale(use_cache: bool, overwrite_cache: bool) -> None:
     oldest entry still in the cache is fetch.CACHE_STALE_AGE_DAYS or
     more days old (see fetch.cache_age_days() for why this is based on
     per-entry fetch timestamps rather than cache.json's own file age).
-    Skipped when the cache isn't actually being read (--no-cache) or is
-    about to be refreshed anyway (--overwrite-cache), since neither case
-    leaves stale data in play."""
+    A cache.json left over from a version of this tool older than that
+    per-entry tracking has entries with no timestamp at all -- their age
+    is unknown rather than 0, so that's flagged with its own message
+    instead of being silently treated as fresh forever (see
+    fetch.cache_has_untracked_entries()). Skipped entirely when the
+    cache isn't actually being read (--no-cache) or is about to be
+    refreshed anyway (--overwrite-cache), since neither case leaves
+    stale data in play."""
     if not use_cache or overwrite_cache:
+        return
+    if fetch.cache_has_untracked_entries():
+        print(
+            "Warning: cache.json has entries from an older version of "
+            "this tool that don't record when they were fetched, so "
+            "their age can't be checked and they may be outdated. "
+            "Re-run with --overwrite-cache to refresh them.",
+            file=sys.stderr,
+        )
         return
     age_days = fetch.cache_age_days()
     if age_days is None or age_days < fetch.CACHE_STALE_AGE_DAYS:

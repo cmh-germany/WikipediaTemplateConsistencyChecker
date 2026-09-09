@@ -248,6 +248,24 @@ def cache_age_days() -> float | None:
     return (time.time() - min(fetch_times)) / 86400
 
 
+def cache_has_untracked_entries() -> bool:
+    """Returns True if cache.json has at least one entry without a
+    "fetched_at" timestamp -- written by a version of this tool older
+    than this feature (e.g. an existing cache.json from before this
+    change, which needs no manual migration or deletion: entries are
+    upgraded in place, lazily, the next time each one is actually
+    (re)fetched). Such an entry's real age is unknown and could be
+    arbitrarily old, so its mere presence is reason enough to suggest a
+    refresh -- regardless of what cache_age_days() reports for entries
+    that *do* have a timestamp, which would otherwise ignore it
+    entirely and never warn about it."""
+    cache = load_cache()
+    return any(
+        not (isinstance(entry, dict) and "fetched_at" in entry)
+        for entry in cache.values()
+    )
+
+
 def save_cache(cache):
     """Writes cache.json atomically: the new content is written to a
     temporary file in the same directory and then moved into place with
