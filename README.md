@@ -240,7 +240,11 @@ rather than from `cache.json`'s own file modification time, because a
 single scan run that only needs to fetch a handful of newly-published
 articles rewrites the whole file — which would otherwise make months-old
 cached data look freshly refreshed just because the file itself was
-recently touched. Writes to
+recently touched. A `cache.json` from before this per-article tracking
+existed needs no manual migration or deletion — its entries are simply
+untimestamped, so the console instead warns that their age can't be
+checked and suggests `--overwrite-cache`; each entry is then upgraded
+in place, lazily, the next time it's actually (re)fetched. Writes to
 `cache.json` are atomic, so running two scans at the same time won't
 corrupt it; if it's ever found corrupted anyway (e.g. an interrupted
 write from an older version of this tool), it's treated as empty and
