@@ -179,6 +179,7 @@ def test_warn_if_cache_stale_warns_when_cache_old(monkeypatch, capsys):
     main._warn_if_cache_stale(use_cache=True, overwrite_cache=False)
     err = capsys.readouterr().err
     assert "45 days old" in err
+    assert "oldest" in err.lower()
     assert "--overwrite-cache" in err
 
 
@@ -213,7 +214,7 @@ def test_run_scan_prints_stale_cache_warning(monkeypatch, capsys, tmp_path):
     result = main.run_scan(output=str(tmp_path / "report.html"))
 
     assert result == 0
-    assert "cache.json is 31 days old" in capsys.readouterr().err
+    assert "31 days old" in capsys.readouterr().err
 
 
 def test_run_scan_overwrite_cache_skips_stale_warning(monkeypatch, capsys, tmp_path):

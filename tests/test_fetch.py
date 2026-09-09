@@ -142,10 +142,25 @@ def test_cache_age_days_returns_none_when_file_absent(cache_file):
     assert fetch.cache_age_days() is None
 
 
-def test_cache_age_days_reflects_modification_time(cache_file):
-    fetch.save_cache({"a": 1})
+def test_cache_age_days_returns_none_for_cache_without_fetched_at(cache_file):
+    # A cache.json written by a version of this tool that predates the
+    # "fetched_at" field -- must not crash, and there's no reliable age
+    # to report for it.
+    fetch.save_cache({"Old Entry": {"wikitext": "...", "categories": []}})
+    assert fetch.cache_age_days() is None
+
+
+def test_cache_age_days_reflects_entry_fetch_timestamp(cache_file):
     thirty_five_days_ago = time.time() - 35 * 86400
-    os.utime(cache_file, (thirty_five_days_ago, thirty_five_days_ago))
+    fetch.save_cache(
+        {
+            "Athlete": {
+                "wikitext": "...",
+                "categories": [],
+                "fetched_at": thirty_five_days_ago,
+            }
+        }
+    )
 
     age = fetch.cache_age_days()
 
@@ -153,11 +168,49 @@ def test_cache_age_days_reflects_modification_time(cache_file):
     assert 34.9 < age < 35.1
 
 
-def test_cache_age_days_near_zero_for_freshly_saved_cache(cache_file):
-    fetch.save_cache({"a": 1})
+def test_cache_age_days_uses_oldest_entry_not_newest(cache_file):
+    fetch.save_cache(
+        {
+            "Old Athlete": {
+                "wikitext": "...",
+                "categories": [],
+                "fetched_at": time.time() - 35 * 86400,
+            },
+            "New Athlete": {
+                "wikitext": "...",
+                "categories": [],
+                "fetched_at": time.time(),
+            },
+        }
+    )
+
     age = fetch.cache_age_days()
+
     assert age is not None
-    assert age < 0.01
+    assert 34.9 < age < 35.1
+
+
+def test_cache_age_days_ignores_file_modification_time(cache_file):
+    """A cache.json touched by something unrelated to this tool (an
+    editor, a git checkout, a sync client) must not look freshly
+    refreshed just because its mtime changed -- age must come from the
+    entries' own "fetched_at" timestamps, not the file's mtime."""
+    thirty_five_days_ago = time.time() - 35 * 86400
+    fetch.save_cache(
+        {
+            "Athlete": {
+                "wikitext": "...",
+                "categories": [],
+                "fetched_at": thirty_five_days_ago,
+            }
+        }
+    )
+    os.utime(cache_file, None)  # bump mtime to "now" without touching content
+
+    age = fetch.cache_age_days()
+
+    assert age is not None
+    assert 34.9 < age < 35.1
 
 
 # ---------------------------------------------------------------------
@@ -196,6 +249,44 @@ def test_fetch_all_with_cache_only_fetches_missing_titles(monkeypatch, cache_fil
     assert result["New Athlete"]["wikitext"] == "fresh wikitext for New Athlete"
 
 
+def test_fetch_all_with_cache_stamps_fetched_at_on_new_entries(monkeypatch, cache_file):
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages([])
+    )
+    before = time.time()
+
+    result = fetch.fetch_all_with_cache(object(), ["New Athlete"], use_cache=True)
+
+    assert before <= result["New Athlete"]["fetched_at"] <= time.time()
+
+
+def test_fetch_all_with_cache_leaves_existing_entries_fetched_at_untouched(
+    monkeypatch, cache_file
+):
+    # A cache with an old entry and a scan that only asks for a
+    # *different*, new title: adding the new title must not bump the
+    # old entry's timestamp, even though save_cache() rewrites the whole
+    # file -- otherwise cache_age_days() would look fresh right after a
+    # scan that only ever touched brand-new articles.
+    old_fetched_at = time.time() - 35 * 86400
+    fetch.save_cache(
+        {
+            "Old Athlete": {
+                "wikitext": "old",
+                "categories": [],
+                "fetched_at": old_fetched_at,
+            }
+        }
+    )
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages([])
+    )
+
+    fetch.fetch_all_with_cache(object(), ["Old Athlete", "New Athlete"], use_cache=True)
+
+    assert fetch.load_cache()["Old Athlete"]["fetched_at"] == old_fetched_at
+
+
 def test_fetch_all_with_cache_overwrite_cache_refetches_everything(
     monkeypatch, cache_file
 ):
@@ -229,6 +320,30 @@ def test_fetch_all_with_cache_overwrite_cache_saves_refreshed_entries(
         fetch.load_cache()["Cached Athlete"]["wikitext"]
         == "fresh wikitext for Cached Athlete"
     )
+
+
+def test_fetch_all_with_cache_overwrite_cache_refreshes_stale_timestamp(
+    monkeypatch, cache_file
+):
+    stale_fetched_at = time.time() - 60 * 86400
+    fetch.save_cache(
+        {
+            "Cached Athlete": {
+                "wikitext": "old",
+                "categories": [],
+                "fetched_at": stale_fetched_at,
+            }
+        }
+    )
+    monkeypatch.setattr(
+        fetch, "fetch_pages_content_and_categories", _fake_fetch_pages([])
+    )
+
+    fetch.fetch_all_with_cache(
+        object(), ["Cached Athlete"], use_cache=True, overwrite_cache=True
+    )
+
+    assert fetch.load_cache()["Cached Athlete"]["fetched_at"] > stale_fetched_at
 
 
 def test_fetch_all_with_cache_overwrite_cache_preserves_untouched_entries(
