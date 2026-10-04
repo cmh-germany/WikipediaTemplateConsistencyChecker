@@ -413,7 +413,7 @@ def test_scan_invokes_run_scan_with_defaults(monkeypatch):
         "use_cache": True,
         "open_output": False,
         "overwrite_cache": False,
-        "fail_on": None,
+        "fail_on": "low",
     }
 
 
@@ -441,7 +441,7 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
         "use_cache": False,
         "open_output": True,
         "overwrite_cache": False,
-        "fail_on": None,
+        "fail_on": "low",
     }
 
 
@@ -683,7 +683,7 @@ def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
 
     result = main.run_scan(output=str(tmp_path / "report.html"))
 
-    assert result == 0
+    assert result == main.EXIT_FINDINGS
     out = capsys.readouterr().out
     assert "Total findings: 2 (Very high: 0, High: 1, Medium: 0, Low: 1)" in out
 
@@ -843,12 +843,17 @@ def test_severity_type_normalizes_spelling(value, expected):
     assert main._severity(value) == expected
 
 
+@pytest.mark.parametrize("value", ["none", "None", " NONE "])
+def test_severity_type_none_disables_failing(value):
+    assert main._severity(value) is None
+
+
 def test_severity_type_rejects_unknown_value_and_lists_choices():
     with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
         main._severity("critical")
     message = str(exc_info.value)
     assert "critical" in message
-    assert "very-high, high, medium, low" in message
+    assert "very-high, high, medium, low, none" in message
 
 
 @pytest.mark.parametrize(
@@ -896,6 +901,24 @@ def test_scan_passes_through_fail_on(monkeypatch):
     assert calls["fail_on"] == "very high"
 
 
+def test_scan_fail_on_none_passes_none(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--fail-on", "none"])
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
+    main.main()
+    assert calls["fail_on"] is None
+
+
+def test_check_defaults_to_fail_on_low(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--check", "X"])
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(
+        main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
+    )
+    main.main()
+    assert calls["fail_on"] == "low"
+
+
 def test_check_passes_through_fail_on(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", "X", "--fail-on", "low"])
     calls: dict[str, Any] = {}
@@ -914,6 +937,24 @@ def test_run_check_exit_code_respects_fail_on(tmp_path, fail_on, expected):
     path = tmp_path / "draft.wikitext"
     path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
     assert main.run_check(str(path), fail_on=fail_on) == expected
+
+
+def test_run_check_fails_on_any_finding_by_default(tmp_path):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    assert main.run_check(str(path)) == main.EXIT_FINDINGS
+
+
+def test_run_scan_fails_on_any_finding_by_default(monkeypatch, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+    assert result == main.EXIT_FINDINGS
+
+
+def test_run_scan_without_findings_exits_0_by_default(monkeypatch, tmp_path):
+    _stub_empty_scan(monkeypatch)
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+    assert result == main.EXIT_OK
 
 
 def test_run_check_fail_on_still_prints_findings(tmp_path, capsys):
@@ -983,7 +1024,8 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess:
 @pytest.mark.parametrize(
     ("extra_args", "expected"),
     [
-        ([], 0),
+        ([], 1),
+        (["--fail-on", "none"], 0),
         (["--fail-on", "low"], 1),
         (["--fail-on", "high"], 1),
         (["--fail-on", "very-high"], 0),
