@@ -9,6 +9,9 @@ Two modes:
   python main.py --check <article_title|URL|local_file>
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
+
+Both modes accept --fail-on SEVERITY to exit with code 1 when a
+finding at or above that severity is present (for CI use).
 """
 
 import argparse
@@ -51,6 +54,21 @@ def _positive_int(value):
     return n
 
 
+def _severity(value: str) -> str:
+    """argparse type for --fail-on. The canonical severity names (see
+    rules.SEVERITY_ORDER) include "very high" with a space, which is
+    awkward to type unquoted in a shell -- so "very-high" (and any
+    capitalization) is accepted too and normalized to the canonical
+    name."""
+    severity = value.strip().lower().replace("-", " ").replace("_", " ")
+    if severity not in rules.SEVERITY_ORDER:
+        valid = ", ".join(s.replace(" ", "-") for s in rules.SEVERITY_ORDER)
+        raise argparse.ArgumentTypeError(
+            f"unknown severity '{value}' -- choose one of: {valid}"
+        )
+    return severity
+
+
 def _check_output_path(path):
     """Best-effort pre-flight check for --output, so an obviously bad
     path fails immediately instead of after a multi-minute scan.
@@ -89,6 +107,30 @@ def _format_severity_summary(counts: dict[str, int]) -> str:
     return f"Total findings: {total} ({breakdown})"
 
 
+def _findings_exit_code(counts: dict[str, int], fail_on: str | None) -> int:
+    """Returns 1 if --fail-on is set and at least one finding is at or
+    above that severity, else 0 -- so CI jobs can gate on findings
+    without parsing console output or the report. Prints the reason to
+    stderr, since a non-zero exit would otherwise look like a crash to
+    whoever reads the CI log."""
+    if fail_on is None:
+        return 0
+    threshold = rules.SEVERITY_ORDER[fail_on]
+    n_failing = sum(
+        count
+        for severity, count in counts.items()
+        if rules.SEVERITY_ORDER[severity] <= threshold
+    )
+    if n_failing == 0:
+        return 0
+    print(
+        f"Exiting with code 1: {n_failing} finding(s) at or above "
+        f"'{fail_on}' severity (--fail-on).",
+        file=sys.stderr,
+    )
+    return 1
+
+
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -118,10 +160,11 @@ def _print_findings(title, findings):
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
-def run_check(target, session=None):
+def run_check(target, session=None, fail_on: str | None = None) -> int:
     """Checks a single article (title/URL) or local wikitext file and
     prints its findings to the console. Returns a process exit code (0
-    on success, 1 if the target/template couldn't be resolved)."""
+    on success, 1 if the target/template couldn't be resolved or if
+    `fail_on` is set and a finding reaches that severity)."""
     session = session or fetch.get_session()
 
     print(f"Checking '{_sanitize_console_text(target)}' ...")
@@ -177,7 +220,7 @@ def run_check(target, session=None):
         discipline_exists=discipline_exists,
     )
     _print_findings(title, findings)
-    return 0
+    return _findings_exit_code(rules.count_by_severity(findings), fail_on)
 
 
 def _warn_if_cache_stale(use_cache: bool, overwrite_cache: bool) -> None:
@@ -222,11 +265,14 @@ def run_scan(
     use_cache=True,
     open_output=False,
     overwrite_cache=False,
-):
+    fail_on: str | None = None,
+) -> int:
     """Fetches all articles embedding the template, runs the rule checks
     across the whole corpus, and writes the HTML report. Returns a
     process exit code (0 on success, 1 if the report couldn't be
-    written)."""
+    written or if `fail_on` is set and a finding reaches that
+    severity -- checked only after the report is written and opened,
+    so a failing CI run still leaves the report behind)."""
     session = fetch.get_session()
 
     _warn_if_cache_stale(use_cache, overwrite_cache)
@@ -282,7 +328,8 @@ def run_scan(
 
     n_with_findings = sum(1 for f in results.values() if f)
     all_findings = [finding for findings in results.values() for finding in findings]
-    severity_summary = _format_severity_summary(rules.count_by_severity(all_findings))
+    counts = rules.count_by_severity(all_findings)
+    severity_summary = _format_severity_summary(counts)
     print(
         f"\nDone. {n_with_findings} of {len(parsed)} articles have "
         f"findings. {severity_summary} Report: {output_path}\n"
@@ -293,7 +340,7 @@ def run_scan(
         webbrowser.open(f"file://{output_path}")
         print("Opened report.")
 
-    return 0
+    return _findings_exit_code(counts, fail_on)
 
 
 def main():
@@ -348,6 +395,16 @@ def main():
         help="Open the generated HTML report in the default browser "
         "after the scan finishes (--scan only)",
     )
+    parser.add_argument(
+        "--fail-on",
+        type=_severity,
+        metavar="SEVERITY",
+        default=None,
+        help="Exit with code 1 if any finding has this severity or higher "
+        "(one of: low, medium, high, very-high) -- useful for automated "
+        "checks such as CI pipelines. 'low' fails on any finding. Without "
+        "this flag, findings never change the exit code",
+    )
     args = parser.parse_args()
 
     # args.check is "" (falsy, but not None) when the user passes
@@ -358,7 +415,7 @@ def main():
         parser.error("--check TARGET must not be empty")
 
     if args.check:
-        return run_check(args.check)
+        return run_check(args.check, fail_on=args.fail_on)
 
     output_error = _check_output_path(args.output)
     if output_error:
@@ -370,6 +427,7 @@ def main():
         use_cache=not args.no_cache,
         open_output=args.open,
         overwrite_cache=args.overwrite_cache,
+        fail_on=args.fail_on,
     )
 
 
