@@ -10,8 +10,9 @@ Two modes:
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
 
-Both modes accept --fail-on SEVERITY to exit with code 1 when a
-finding at or above that severity is present (for CI use).
+Exit codes: 0 = no finding at or above --fail-on SEVERITY (default:
+low, i.e. any finding; "none" disables this), 1 = such findings
+present, 2 = the run failed or the arguments were invalid.
 """
 
 import argparse
@@ -33,6 +34,9 @@ __version__ = "0.2"
 EXIT_OK = 0
 EXIT_FINDINGS = 1
 EXIT_ERROR = 2
+
+# Fail on any finding unless told otherwise (--fail-on none).
+DEFAULT_FAIL_ON: str | None = rules.LOW
 
 
 def _extract_title_from_input(user_input):
@@ -61,17 +65,20 @@ def _positive_int(value):
     return n
 
 
-def _severity(value: str) -> str:
+def _severity(value: str) -> str | None:
     """argparse type for --fail-on. The canonical severity names (see
     rules.SEVERITY_ORDER) include "very high" with a space, which is
     awkward to type unquoted in a shell -- so "very-high" (and any
     capitalization) is accepted too and normalized to the canonical
-    name."""
+    name. "none" maps to None, the only way to switch off failing on
+    findings now that --fail-on defaults to "low"."""
     severity = value.strip().lower().replace("-", " ").replace("_", " ")
+    if severity == "none":
+        return None
     if severity not in rules.SEVERITY_ORDER:
         valid = ", ".join(s.replace(" ", "-") for s in rules.SEVERITY_ORDER)
         raise argparse.ArgumentTypeError(
-            f"unknown severity '{value}' -- choose one of: {valid}"
+            f"unknown severity '{value}' -- choose one of: {valid}, none"
         )
     return severity
 
@@ -167,7 +174,7 @@ def _print_findings(title, findings):
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
-def run_check(target, session=None, fail_on: str | None = None) -> int:
+def run_check(target, session=None, fail_on: str | None = DEFAULT_FAIL_ON) -> int:
     """Checks a single article (title/URL) or local wikitext file and
     prints its findings to the console. Returns a process exit code:
     EXIT_ERROR if the target/template couldn't be resolved, else
@@ -273,7 +280,7 @@ def run_scan(
     use_cache=True,
     open_output=False,
     overwrite_cache=False,
-    fail_on: str | None = None,
+    fail_on: str | None = DEFAULT_FAIL_ON,
 ) -> int:
     """Fetches all articles embedding the template, runs the rule checks
     across the whole corpus, and writes the HTML report. Returns a
@@ -408,11 +415,12 @@ def main():
         "--fail-on",
         type=_severity,
         metavar="SEVERITY",
-        default=None,
+        default=DEFAULT_FAIL_ON,
         help="Exit with code 1 if any finding has this severity or higher "
-        "(one of: low, medium, high, very-high) -- useful for automated "
-        "checks such as CI pipelines. 'low' fails on any finding. Without "
-        "this flag, findings never change the exit code",
+        "(one of: low, medium, high, very-high, none). Default: low, i.e. "
+        "exit with code 1 on any finding. Use 'none' to always exit with "
+        "code 0 when the run completes, regardless of findings. Errors "
+        "(e.g. article not found) always exit with code 2",
     )
     args = parser.parse_args()
 
