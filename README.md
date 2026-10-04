@@ -51,6 +51,7 @@
     <li>
       <a href="#usage">Usage</a>
       <ul>
+        <li><a href="#exit-codes-ci-usage">Exit Codes (CI Usage)</a></li>
         <li><a href="#severity-levels">Severity Levels</a></li>
       </ul>
     </li>
@@ -307,6 +308,44 @@ it into a plain text file (e.g. with Notepad or TextEdit), saved with a
 _For the full rule set and the reasoning behind it, see [`rules.py`](rules.py)
 and [Rule Validation](#rule-validation) below._
 
+### Exit Codes (CI Usage)
+
+Like many linters, the tool reports through its exit code whether it
+found anything, so it can be used as an automated gate — e.g. in a CI
+pipeline or a pre-publish check — without parsing its output. By
+default, a run ends with exit code `1` if there is **any** finding.
+`--fail-on SEVERITY` (in either mode) raises that bar: the run then only
+ends with `1` if at least one finding has that
+[severity](#severity-levels) or higher. `SEVERITY` is one of `low` (the
+default — any finding), `medium`, `high`, `very-high`, or `none`, which
+switches this off so a completed run always ends with `0`:
+
+```sh
+python main.py --check my_draft.wikitext --fail-on high   # fail on high or very high findings
+python main.py --scan --fail-on very-high                 # fail only on logical contradictions
+python main.py --scan --fail-on none                      # never fail because of findings
+```
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Run completed; no finding reached the `--fail-on` severity (by default: no findings at all) |
+| `1` | Run completed, and at least one finding reached the `--fail-on` severity |
+| `2` | The run failed (article/infobox not found, draft file unreadable, report couldn't be written) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity) |
+
+If you're not using the tool in an automated setup, you can ignore the
+exit code entirely — a `1` does **not** mean the tool crashed. The
+findings are still printed in full, and with `--scan` the HTML report
+is still written (and opened with `--open`) before the run ends with `1`.
+When a run fails because of findings, it also prints a one-line
+explanation to stderr, e.g.
+`Exiting with code 1: 3 finding(s) at or above 'high' severity (--fail-on).`,
+so the reason is visible in a CI log. Example GitHub Actions step:
+
+```yaml
+- name: Check infobox draft
+  run: python main.py --check drafts/athlete.wikitext --fail-on high
+```
+
 ### Severity Levels
 
 | Level | Meaning |
@@ -339,8 +378,11 @@ hand-crafted edge cases, but does not make any network calls itself
 (all `fetch.py` calls are mocked). It's basic coverage -- organized so
 every infobox field is exercised by at least one test rather than
 every individual rule, and so every CLI flag (`--scan`, `--check`,
-`--limit`, `--output`, `--no-cache`, `--overwrite-cache`, `--open`) is
-exercised at least once -- rather than an exhaustive suite.
+`--limit`, `--output`, `--no-cache`, `--overwrite-cache`, `--open`,
+`--fail-on`) is exercised at least once -- rather than an exhaustive
+suite. The `--fail-on` exit codes are additionally checked end-to-end by
+running the CLI in a subprocess against a local draft file, which needs
+no network access either.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

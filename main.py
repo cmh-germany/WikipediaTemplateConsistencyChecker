@@ -9,6 +9,10 @@ Two modes:
   python main.py --check <article_title|URL|local_file>
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
+
+Exit codes: 0 = no finding at or above --fail-on SEVERITY (default:
+low, i.e. any finding; "none" disables this), 1 = such findings
+present, 2 = the run failed or the arguments were invalid.
 """
 
 import argparse
@@ -22,7 +26,17 @@ import parse
 import report
 import rules
 
-__version__ = "0.2"
+__version__ = "0.3"
+
+# Process exit codes. EXIT_ERROR deliberately matches argparse's own
+# exit code for invalid arguments, so CI can treat "the tool couldn't do
+# its job" (2) differently from "the tool found problems" (1).
+EXIT_OK = 0
+EXIT_FINDINGS = 1
+EXIT_ERROR = 2
+
+# Fail on any finding unless told otherwise (--fail-on none).
+DEFAULT_FAIL_ON: str | None = rules.LOW
 
 
 def _extract_title_from_input(user_input):
@@ -49,6 +63,24 @@ def _positive_int(value):
     if n < 1:
         raise argparse.ArgumentTypeError(f"must be a positive integer, got {n}")
     return n
+
+
+def _severity(value: str) -> str | None:
+    """argparse type for --fail-on. The canonical severity names (see
+    rules.SEVERITY_ORDER) include "very high" with a space, which is
+    awkward to type unquoted in a shell -- so "very-high" (and any
+    capitalization) is accepted too and normalized to the canonical
+    name. "none" maps to None, the only way to switch off failing on
+    findings now that --fail-on defaults to "low"."""
+    severity = value.strip().lower().replace("-", " ").replace("_", " ")
+    if severity == "none":
+        return None
+    if severity not in rules.SEVERITY_ORDER:
+        valid = ", ".join(s.replace(" ", "-") for s in rules.SEVERITY_ORDER)
+        raise argparse.ArgumentTypeError(
+            f"unknown severity '{value}' -- choose one of: {valid}, none"
+        )
+    return severity
 
 
 def _check_output_path(path):
@@ -89,6 +121,30 @@ def _format_severity_summary(counts: dict[str, int]) -> str:
     return f"Total findings: {total} ({breakdown})"
 
 
+def _findings_exit_code(counts: dict[str, int], fail_on: str | None) -> int:
+    """Returns EXIT_FINDINGS if --fail-on is set and at least one
+    finding is at or above that severity, else EXIT_OK -- so CI jobs
+    can gate on findings without parsing console output or the report.
+    Prints the reason to stderr, since a non-zero exit would otherwise
+    look like a crash to whoever reads the CI log."""
+    if fail_on is None:
+        return EXIT_OK
+    threshold = rules.SEVERITY_ORDER[fail_on]
+    n_failing = sum(
+        count
+        for severity, count in counts.items()
+        if rules.SEVERITY_ORDER[severity] <= threshold
+    )
+    if n_failing == 0:
+        return EXIT_OK
+    print(
+        f"Exiting with code {EXIT_FINDINGS}: {n_failing} finding(s) at or "
+        f"above '{fail_on}' severity (--fail-on).",
+        file=sys.stderr,
+    )
+    return EXIT_FINDINGS
+
+
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -118,10 +174,12 @@ def _print_findings(title, findings):
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
-def run_check(target, session=None):
+def run_check(target, session=None, fail_on: str | None = DEFAULT_FAIL_ON) -> int:
     """Checks a single article (title/URL) or local wikitext file and
-    prints its findings to the console. Returns a process exit code (0
-    on success, 1 if the target/template couldn't be resolved)."""
+    prints its findings to the console. Returns a process exit code:
+    EXIT_ERROR if the target/template couldn't be resolved, else
+    EXIT_FINDINGS if `fail_on` is set and a finding reaches that
+    severity, else EXIT_OK."""
     session = session or fetch.get_session()
 
     print(f"Checking '{_sanitize_console_text(target)}' ...")
@@ -136,10 +194,10 @@ def run_check(target, session=None):
                 "save the draft as plain UTF-8 text, not .docx or "
                 "another encoding (see README)."
             )
-            return 1
+            return EXIT_ERROR
         except OSError as e:
             print(f"Could not read '{target}': {e.strerror or e}.")
-            return 1
+            return EXIT_ERROR
         title = os.path.basename(target)
         categories = []
     else:
@@ -149,14 +207,14 @@ def run_check(target, session=None):
             print(
                 f"Article '{title}' not found or has no retrievable wikitext revision."
             )
-            return 1
+            return EXIT_ERROR
         wikitext = data[title]["wikitext"]
         categories = data[title]["categories"]
 
     params = parse.parse_infobox_params(wikitext)
     if params is None:
         print(f"No Infobox Leichtathlet embedding found in '{target}'.")
-        return 1
+        return EXIT_ERROR
 
     nation_codes = rules.nation_codes_to_check(params.get("nation", ""))
     nation_exists = None
@@ -177,7 +235,7 @@ def run_check(target, session=None):
         discipline_exists=discipline_exists,
     )
     _print_findings(title, findings)
-    return 0
+    return _findings_exit_code(rules.count_by_severity(findings), fail_on)
 
 
 def _warn_if_cache_stale(use_cache: bool, overwrite_cache: bool) -> None:
@@ -222,11 +280,15 @@ def run_scan(
     use_cache=True,
     open_output=False,
     overwrite_cache=False,
-):
+    fail_on: str | None = DEFAULT_FAIL_ON,
+) -> int:
     """Fetches all articles embedding the template, runs the rule checks
     across the whole corpus, and writes the HTML report. Returns a
-    process exit code (0 on success, 1 if the report couldn't be
-    written)."""
+    process exit code: EXIT_ERROR if the report couldn't be written,
+    else EXIT_FINDINGS if `fail_on` is set and a finding reaches that
+    severity, else EXIT_OK. Findings are checked only after the report
+    is written and opened, so a failing CI run still leaves the report
+    behind."""
     session = fetch.get_session()
 
     _warn_if_cache_stale(use_cache, overwrite_cache)
@@ -278,11 +340,12 @@ def run_scan(
         report.generate_html_report(results, output, n_scanned=len(parsed))
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
-        return 1
+        return EXIT_ERROR
 
     n_with_findings = sum(1 for f in results.values() if f)
     all_findings = [finding for findings in results.values() for finding in findings]
-    severity_summary = _format_severity_summary(rules.count_by_severity(all_findings))
+    counts = rules.count_by_severity(all_findings)
+    severity_summary = _format_severity_summary(counts)
     print(
         f"\nDone. {n_with_findings} of {len(parsed)} articles have "
         f"findings. {severity_summary} Report: {output_path}\n"
@@ -293,7 +356,7 @@ def run_scan(
         webbrowser.open(f"file://{output_path}")
         print("Opened report.")
 
-    return 0
+    return _findings_exit_code(counts, fail_on)
 
 
 def main():
@@ -348,6 +411,17 @@ def main():
         help="Open the generated HTML report in the default browser "
         "after the scan finishes (--scan only)",
     )
+    parser.add_argument(
+        "--fail-on",
+        type=_severity,
+        metavar="SEVERITY",
+        default=DEFAULT_FAIL_ON,
+        help="Exit with code 1 if any finding has this severity or higher "
+        "(one of: low, medium, high, very-high, none). Default: low, i.e. "
+        "exit with code 1 on any finding. Use 'none' to always exit with "
+        "code 0 when the run completes, regardless of findings. Errors "
+        "(e.g. article not found) always exit with code 2",
+    )
     args = parser.parse_args()
 
     # args.check is "" (falsy, but not None) when the user passes
@@ -358,7 +432,7 @@ def main():
         parser.error("--check TARGET must not be empty")
 
     if args.check:
-        return run_check(args.check)
+        return run_check(args.check, fail_on=args.fail_on)
 
     output_error = _check_output_path(args.output)
     if output_error:
@@ -370,6 +444,7 @@ def main():
         use_cache=not args.no_cache,
         open_output=args.open,
         overwrite_cache=args.overwrite_cache,
+        fail_on=args.fail_on,
     )
 
 

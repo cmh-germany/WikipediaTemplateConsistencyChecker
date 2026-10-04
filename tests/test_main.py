@@ -1,7 +1,8 @@
 """Tests for main.py's command-line interface: argument parsing/
-dispatch (--scan vs. --check, --limit, --output, --no-cache, --open)
-and the --check target-resolution logic (article title, article URL,
-local wikitext file). run_scan's internals (the actual scan loop) are
+dispatch (--scan vs. --check, --limit, --output, --no-cache, --open,
+--fail-on), the --check target-resolution logic (article title, article
+URL, local wikitext file), and the exit codes --fail-on produces
+(including via a real subprocess). run_scan's internals (the actual scan loop) are
 out of scope here -- these tests are about the CLI surface, not the
 scan business logic.
 
@@ -10,6 +11,7 @@ every test here either fully mocks fetch/report, or (for --scan)
 replaces run_scan itself, to keep the suite network-free."""
 
 import os
+import subprocess
 import sys
 from typing import Any
 
@@ -18,6 +20,7 @@ import pytest
 import main
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+MAIN_PY = os.path.abspath(main.__file__)
 
 
 def _recording_stub(calls: list[dict]):
@@ -410,6 +413,7 @@ def test_scan_invokes_run_scan_with_defaults(monkeypatch):
         "use_cache": True,
         "open_output": False,
         "overwrite_cache": False,
+        "fail_on": "low",
     }
 
 
@@ -437,6 +441,7 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
         "use_cache": False,
         "open_output": True,
         "overwrite_cache": False,
+        "fail_on": "low",
     }
 
 
@@ -452,7 +457,7 @@ def test_check_invokes_run_check_with_target(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", "Usain Bolt"])
     calls: dict[str, Any] = {}
     monkeypatch.setattr(
-        main, "run_check", lambda target: calls.update(target=target) or 0
+        main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
     )
     main.main()
     assert calls["target"] == "Usain Bolt"
@@ -465,7 +470,7 @@ def test_check_passes_target_through_unmodified_url(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["main.py", "--check", url])
     calls: dict[str, Any] = {}
     monkeypatch.setattr(
-        main, "run_check", lambda target: calls.update(target=target) or 0
+        main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
     )
     main.main()
     assert calls["target"] == url
@@ -519,7 +524,7 @@ def test_run_check_resolves_article_url_to_title_before_fetching(monkeypatch):
     assert seen["titles"] == ["Usain Bolt"]
 
 
-def test_run_check_article_not_found_returns_1_and_prints_message(monkeypatch, capsys):
+def test_run_check_article_not_found_returns_2_and_prints_message(monkeypatch, capsys):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
     monkeypatch.setattr(
         main.fetch,
@@ -529,11 +534,11 @@ def test_run_check_article_not_found_returns_1_and_prints_message(monkeypatch, c
 
     result = main.run_check("Nonexistent Article XYZ")
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "not found" in capsys.readouterr().out
 
 
-def test_run_check_no_infobox_found_returns_1_and_prints_message(monkeypatch, capsys):
+def test_run_check_no_infobox_found_returns_2_and_prints_message(monkeypatch, capsys):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
     monkeypatch.setattr(
         main.fetch,
@@ -545,11 +550,11 @@ def test_run_check_no_infobox_found_returns_1_and_prints_message(monkeypatch, ca
 
     result = main.run_check("Some Random Article")
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "No Infobox Leichtathlet embedding found" in capsys.readouterr().out
 
 
-def test_run_check_local_file_invalid_encoding_returns_1(tmp_path, capsys):
+def test_run_check_local_file_invalid_encoding_returns_2(tmp_path, capsys):
     # A draft accidentally saved as UTF-16 (e.g. from a word processor
     # default) instead of plain UTF-8 -- realistic given the README
     # explicitly warns against saving as .docx/rich text.
@@ -558,11 +563,11 @@ def test_run_check_local_file_invalid_encoding_returns_1(tmp_path, capsys):
 
     result = main.run_check(str(path))
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "not valid UTF-8" in capsys.readouterr().out
 
 
-def test_run_check_local_file_unreadable_returns_1(monkeypatch, capsys, tmp_path):
+def test_run_check_local_file_unreadable_returns_2(monkeypatch, capsys, tmp_path):
     import builtins
 
     path = tmp_path / "draft.wikitext"
@@ -579,7 +584,7 @@ def test_run_check_local_file_unreadable_returns_1(monkeypatch, capsys, tmp_path
 
     result = main.run_check(str(path))
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "Could not read" in capsys.readouterr().out
 
 
@@ -621,7 +626,7 @@ def test_scan_accepts_output_path_in_existing_writable_directory(monkeypatch, tm
     assert calls["output"] == str(output)
 
 
-def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
+def test_run_scan_report_write_failure_returns_2_instead_of_crashing(
     monkeypatch, capsys
 ):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
@@ -644,7 +649,7 @@ def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
 
     result = main.run_scan(output="Z:/no_access/report.html")
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "Could not write report" in capsys.readouterr().out
 
 
@@ -678,7 +683,7 @@ def test_run_scan_prints_severity_summary(monkeypatch, capsys, tmp_path):
 
     result = main.run_scan(output=str(tmp_path / "report.html"))
 
-    assert result == 0
+    assert result == main.EXIT_FINDINGS
     out = capsys.readouterr().out
     assert "Total findings: 2 (Very high: 0, High: 1, Medium: 0, Low: 1)" in out
 
@@ -792,3 +797,266 @@ def test_run_scan_done_line_ends_with_newline_before_next_output(
     # the next message rather than the two running together.
     assert lines[done_index + 1] == ""
     assert opening_index > done_index + 1
+
+
+# ---------------------------------------------------------------------
+# --fail-on: CI-friendly exit codes (issue #12)
+# ---------------------------------------------------------------------
+
+# status='a' (active) with a death date -> one "high" finding
+# (death_date_with_non_deceased_status); no birthplace -> one "low"
+# finding (missing_birthplace). No nation/disziplin, so run_check needs
+# no template-existence lookups (and so no network) for it.
+_HIGH_AND_LOW_WIKITEXT = "{{Infobox Leichtathlet|status=a|sterbedatum=2020-01-01}}"
+
+
+def _stub_scan_with_high_and_low_findings(monkeypatch):
+    monkeypatch.setattr(main.fetch, "get_session", lambda: object())
+    monkeypatch.setattr(
+        main.fetch,
+        "list_pages_using_template",
+        lambda session, limit=None: ["Dead Athlete"],
+    )
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_all_with_cache",
+        lambda session, titles, use_cache=True, overwrite_cache=False: {
+            "Dead Athlete": {"wikitext": _HIGH_AND_LOW_WIKITEXT, "categories": []}
+        },
+    )
+    monkeypatch.setattr(main.fetch, "templates_exist", lambda session, titles: {})
+    monkeypatch.setattr(main.fetch, "cache_age_days", lambda: None)
+    monkeypatch.setattr(main.fetch, "cache_has_untracked_entries", lambda: False)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("low", "low"),
+        ("HIGH", "high"),
+        ("very-high", "very high"),
+        ("very_high", "very high"),
+        ("very high", "very high"),
+    ],
+)
+def test_severity_type_normalizes_spelling(value, expected):
+    assert main._severity(value) == expected
+
+
+@pytest.mark.parametrize("value", ["none", "None", " NONE "])
+def test_severity_type_none_disables_failing(value):
+    assert main._severity(value) is None
+
+
+def test_severity_type_rejects_unknown_value_and_lists_choices():
+    with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
+        main._severity("critical")
+    message = str(exc_info.value)
+    assert "critical" in message
+    assert "very-high, high, medium, low, none" in message
+
+
+@pytest.mark.parametrize(
+    ("fail_on", "expected"),
+    [
+        (None, 0),
+        ("low", 1),
+        ("medium", 1),
+        ("high", 1),
+        ("very high", 0),
+    ],
+)
+def test_findings_exit_code_thresholds(fail_on, expected):
+    counts = {"very high": 0, "high": 1, "medium": 0, "low": 2}
+    assert main._findings_exit_code(counts, fail_on) == expected
+
+
+def test_findings_exit_code_zero_when_no_findings():
+    counts = dict.fromkeys(main.rules.SEVERITY_ORDER, 0)
+    assert main._findings_exit_code(counts, "low") == 0
+
+
+def test_findings_exit_code_explains_failure_on_stderr(capsys):
+    counts = {"very high": 1, "high": 2, "medium": 0, "low": 5}
+    main._findings_exit_code(counts, "high")
+    err = capsys.readouterr().err
+    assert "3 finding(s) at or above 'high' severity" in err
+
+
+def test_fail_on_rejects_unknown_severity(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--fail-on", "critical"])
+    calls: list[dict] = []
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
+    with pytest.raises(SystemExit) as exc_info:
+        main.main()
+    assert exc_info.value.code == 2
+    assert calls == []
+
+
+def test_scan_passes_through_fail_on(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--fail-on", "very-high"])
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
+    main.main()
+    assert calls["fail_on"] == "very high"
+
+
+def test_scan_fail_on_none_passes_none(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--fail-on", "none"])
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
+    main.main()
+    assert calls["fail_on"] is None
+
+
+def test_check_defaults_to_fail_on_low(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--check", "X"])
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(
+        main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
+    )
+    main.main()
+    assert calls["fail_on"] == "low"
+
+
+def test_check_passes_through_fail_on(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--check", "X", "--fail-on", "low"])
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(
+        main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
+    )
+    main.main()
+    assert calls["fail_on"] == "low"
+
+
+@pytest.mark.parametrize(
+    ("fail_on", "expected"),
+    [(None, 0), ("high", 1), ("low", 1), ("very high", 0)],
+)
+def test_run_check_exit_code_respects_fail_on(tmp_path, fail_on, expected):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    assert main.run_check(str(path), fail_on=fail_on) == expected
+
+
+def test_run_check_fails_on_any_finding_by_default(tmp_path):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    assert main.run_check(str(path)) == main.EXIT_FINDINGS
+
+
+def test_run_scan_fails_on_any_finding_by_default(monkeypatch, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+    assert result == main.EXIT_FINDINGS
+
+
+def test_run_scan_without_findings_exits_0_by_default(monkeypatch, tmp_path):
+    _stub_empty_scan(monkeypatch)
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+    assert result == main.EXIT_OK
+
+
+def test_run_check_fail_on_still_prints_findings(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    main.run_check(str(path), fail_on="low")
+    assert "death_date_with_non_deceased_status" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("fail_on", "expected"),
+    [(None, 0), ("medium", 1), ("very high", 0)],
+)
+def test_run_scan_exit_code_respects_fail_on(monkeypatch, tmp_path, fail_on, expected):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    result = main.run_scan(output=str(tmp_path / "report.html"), fail_on=fail_on)
+    assert result == expected
+
+
+def test_run_scan_fail_on_still_writes_and_opens_report(monkeypatch, tmp_path):
+    # The non-zero exit must not cost CI users the report itself.
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    opened_urls: list[str] = []
+    monkeypatch.setattr(main.webbrowser, "open", opened_urls.append)
+    output = tmp_path / "report.html"
+
+    result = main.run_scan(output=str(output), open_output=True, fail_on="low")
+
+    assert result == 1
+    assert output.is_file()
+    assert len(opened_urls) == 1
+
+
+def test_run_scan_report_write_failure_still_returns_2_with_fail_on(
+    monkeypatch, capsys
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+
+    def raise_permission_error(*args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(main.report, "generate_html_report", raise_permission_error)
+
+    assert (
+        main.run_scan(output="Z:/no_access/report.html", fail_on="low")
+        == main.EXIT_ERROR
+    )
+    assert "Could not write report" in capsys.readouterr().out
+
+
+# Integration: the real CLI in a subprocess, so the exit code that
+# actually reaches the shell (via sys.exit(main())) is what's asserted.
+# --check on a local file with no nation/disziplin makes no network calls.
+
+
+def _run_cli(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, MAIN_PY, *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=os.path.dirname(MAIN_PY),
+        timeout=60,
+    )
+
+
+@pytest.mark.parametrize(
+    ("extra_args", "expected"),
+    [
+        ([], 1),
+        (["--fail-on", "none"], 0),
+        (["--fail-on", "low"], 1),
+        (["--fail-on", "high"], 1),
+        (["--fail-on", "very-high"], 0),
+    ],
+)
+def test_cli_check_exit_code_with_fail_on(tmp_path, extra_args, expected):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    result = _run_cli("--check", str(path), *extra_args)
+    assert result.returncode == expected, result.stderr
+
+
+def test_cli_check_clean_draft_exits_0_with_fail_on_low(tmp_path):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(
+        "{{Infobox Leichtathlet|status=a|geburtsort=Berlin}}", encoding="utf-8"
+    )
+    result = _run_cli("--check", str(path), "--fail-on", "low")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_cli_check_error_exits_2_not_1(tmp_path):
+    # A run that fails (here: no infobox in the draft) must be
+    # distinguishable from one that merely found problems.
+    path = tmp_path / "draft.wikitext"
+    path.write_text("no infobox here", encoding="utf-8")
+    result = _run_cli("--check", str(path), "--fail-on", "low")
+    assert result.returncode == 2
+
+
+def test_cli_rejects_unknown_fail_on_severity_with_exit_2(tmp_path):
+    result = _run_cli("--check", "whatever", "--fail-on", "critical")
+    assert result.returncode == 2
+    assert "unknown severity 'critical'" in result.stderr
