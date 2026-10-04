@@ -27,6 +27,13 @@ import rules
 
 __version__ = "0.2"
 
+# Process exit codes. EXIT_ERROR deliberately matches argparse's own
+# exit code for invalid arguments, so CI can treat "the tool couldn't do
+# its job" (2) differently from "the tool found problems" (1).
+EXIT_OK = 0
+EXIT_FINDINGS = 1
+EXIT_ERROR = 2
+
 
 def _extract_title_from_input(user_input):
     if user_input.startswith(("http://", "https://")):
@@ -108,13 +115,13 @@ def _format_severity_summary(counts: dict[str, int]) -> str:
 
 
 def _findings_exit_code(counts: dict[str, int], fail_on: str | None) -> int:
-    """Returns 1 if --fail-on is set and at least one finding is at or
-    above that severity, else 0 -- so CI jobs can gate on findings
-    without parsing console output or the report. Prints the reason to
-    stderr, since a non-zero exit would otherwise look like a crash to
-    whoever reads the CI log."""
+    """Returns EXIT_FINDINGS if --fail-on is set and at least one
+    finding is at or above that severity, else EXIT_OK -- so CI jobs
+    can gate on findings without parsing console output or the report.
+    Prints the reason to stderr, since a non-zero exit would otherwise
+    look like a crash to whoever reads the CI log."""
     if fail_on is None:
-        return 0
+        return EXIT_OK
     threshold = rules.SEVERITY_ORDER[fail_on]
     n_failing = sum(
         count
@@ -122,13 +129,13 @@ def _findings_exit_code(counts: dict[str, int], fail_on: str | None) -> int:
         if rules.SEVERITY_ORDER[severity] <= threshold
     )
     if n_failing == 0:
-        return 0
+        return EXIT_OK
     print(
-        f"Exiting with code 1: {n_failing} finding(s) at or above "
-        f"'{fail_on}' severity (--fail-on).",
+        f"Exiting with code {EXIT_FINDINGS}: {n_failing} finding(s) at or "
+        f"above '{fail_on}' severity (--fail-on).",
         file=sys.stderr,
     )
-    return 1
+    return EXIT_FINDINGS
 
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -162,9 +169,10 @@ def _print_findings(title, findings):
 
 def run_check(target, session=None, fail_on: str | None = None) -> int:
     """Checks a single article (title/URL) or local wikitext file and
-    prints its findings to the console. Returns a process exit code (0
-    on success, 1 if the target/template couldn't be resolved or if
-    `fail_on` is set and a finding reaches that severity)."""
+    prints its findings to the console. Returns a process exit code:
+    EXIT_ERROR if the target/template couldn't be resolved, else
+    EXIT_FINDINGS if `fail_on` is set and a finding reaches that
+    severity, else EXIT_OK."""
     session = session or fetch.get_session()
 
     print(f"Checking '{_sanitize_console_text(target)}' ...")
@@ -179,10 +187,10 @@ def run_check(target, session=None, fail_on: str | None = None) -> int:
                 "save the draft as plain UTF-8 text, not .docx or "
                 "another encoding (see README)."
             )
-            return 1
+            return EXIT_ERROR
         except OSError as e:
             print(f"Could not read '{target}': {e.strerror or e}.")
-            return 1
+            return EXIT_ERROR
         title = os.path.basename(target)
         categories = []
     else:
@@ -192,14 +200,14 @@ def run_check(target, session=None, fail_on: str | None = None) -> int:
             print(
                 f"Article '{title}' not found or has no retrievable wikitext revision."
             )
-            return 1
+            return EXIT_ERROR
         wikitext = data[title]["wikitext"]
         categories = data[title]["categories"]
 
     params = parse.parse_infobox_params(wikitext)
     if params is None:
         print(f"No Infobox Leichtathlet embedding found in '{target}'.")
-        return 1
+        return EXIT_ERROR
 
     nation_codes = rules.nation_codes_to_check(params.get("nation", ""))
     nation_exists = None
@@ -269,10 +277,11 @@ def run_scan(
 ) -> int:
     """Fetches all articles embedding the template, runs the rule checks
     across the whole corpus, and writes the HTML report. Returns a
-    process exit code (0 on success, 1 if the report couldn't be
-    written or if `fail_on` is set and a finding reaches that
-    severity -- checked only after the report is written and opened,
-    so a failing CI run still leaves the report behind)."""
+    process exit code: EXIT_ERROR if the report couldn't be written,
+    else EXIT_FINDINGS if `fail_on` is set and a finding reaches that
+    severity, else EXIT_OK. Findings are checked only after the report
+    is written and opened, so a failing CI run still leaves the report
+    behind."""
     session = fetch.get_session()
 
     _warn_if_cache_stale(use_cache, overwrite_cache)
@@ -324,7 +333,7 @@ def run_scan(
         report.generate_html_report(results, output, n_scanned=len(parsed))
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
-        return 1
+        return EXIT_ERROR
 
     n_with_findings = sum(1 for f in results.values() if f)
     all_findings = [finding for findings in results.values() for finding in findings]
