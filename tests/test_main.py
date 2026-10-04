@@ -524,7 +524,7 @@ def test_run_check_resolves_article_url_to_title_before_fetching(monkeypatch):
     assert seen["titles"] == ["Usain Bolt"]
 
 
-def test_run_check_article_not_found_returns_1_and_prints_message(monkeypatch, capsys):
+def test_run_check_article_not_found_returns_2_and_prints_message(monkeypatch, capsys):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
     monkeypatch.setattr(
         main.fetch,
@@ -534,11 +534,11 @@ def test_run_check_article_not_found_returns_1_and_prints_message(monkeypatch, c
 
     result = main.run_check("Nonexistent Article XYZ")
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "not found" in capsys.readouterr().out
 
 
-def test_run_check_no_infobox_found_returns_1_and_prints_message(monkeypatch, capsys):
+def test_run_check_no_infobox_found_returns_2_and_prints_message(monkeypatch, capsys):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
     monkeypatch.setattr(
         main.fetch,
@@ -550,11 +550,11 @@ def test_run_check_no_infobox_found_returns_1_and_prints_message(monkeypatch, ca
 
     result = main.run_check("Some Random Article")
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "No Infobox Leichtathlet embedding found" in capsys.readouterr().out
 
 
-def test_run_check_local_file_invalid_encoding_returns_1(tmp_path, capsys):
+def test_run_check_local_file_invalid_encoding_returns_2(tmp_path, capsys):
     # A draft accidentally saved as UTF-16 (e.g. from a word processor
     # default) instead of plain UTF-8 -- realistic given the README
     # explicitly warns against saving as .docx/rich text.
@@ -563,11 +563,11 @@ def test_run_check_local_file_invalid_encoding_returns_1(tmp_path, capsys):
 
     result = main.run_check(str(path))
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "not valid UTF-8" in capsys.readouterr().out
 
 
-def test_run_check_local_file_unreadable_returns_1(monkeypatch, capsys, tmp_path):
+def test_run_check_local_file_unreadable_returns_2(monkeypatch, capsys, tmp_path):
     import builtins
 
     path = tmp_path / "draft.wikitext"
@@ -584,7 +584,7 @@ def test_run_check_local_file_unreadable_returns_1(monkeypatch, capsys, tmp_path
 
     result = main.run_check(str(path))
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "Could not read" in capsys.readouterr().out
 
 
@@ -626,7 +626,7 @@ def test_scan_accepts_output_path_in_existing_writable_directory(monkeypatch, tm
     assert calls["output"] == str(output)
 
 
-def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
+def test_run_scan_report_write_failure_returns_2_instead_of_crashing(
     monkeypatch, capsys
 ):
     monkeypatch.setattr(main.fetch, "get_session", lambda: object())
@@ -649,7 +649,7 @@ def test_run_scan_report_write_failure_returns_1_instead_of_crashing(
 
     result = main.run_scan(output="Z:/no_access/report.html")
 
-    assert result == 1
+    assert result == main.EXIT_ERROR
     assert "Could not write report" in capsys.readouterr().out
 
 
@@ -947,7 +947,7 @@ def test_run_scan_fail_on_still_writes_and_opens_report(monkeypatch, tmp_path):
     assert len(opened_urls) == 1
 
 
-def test_run_scan_report_write_failure_still_returns_1_with_fail_on(
+def test_run_scan_report_write_failure_still_returns_2_with_fail_on(
     monkeypatch, capsys
 ):
     _stub_scan_with_high_and_low_findings(monkeypatch)
@@ -957,7 +957,10 @@ def test_run_scan_report_write_failure_still_returns_1_with_fail_on(
 
     monkeypatch.setattr(main.report, "generate_html_report", raise_permission_error)
 
-    assert main.run_scan(output="Z:/no_access/report.html", fail_on="low") == 1
+    assert (
+        main.run_scan(output="Z:/no_access/report.html", fail_on="low")
+        == main.EXIT_ERROR
+    )
     assert "Could not write report" in capsys.readouterr().out
 
 
@@ -1000,6 +1003,15 @@ def test_cli_check_clean_draft_exits_0_with_fail_on_low(tmp_path):
     )
     result = _run_cli("--check", str(path), "--fail-on", "low")
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_cli_check_error_exits_2_not_1(tmp_path):
+    # A run that fails (here: no infobox in the draft) must be
+    # distinguishable from one that merely found problems.
+    path = tmp_path / "draft.wikitext"
+    path.write_text("no infobox here", encoding="utf-8")
+    result = _run_cli("--check", str(path), "--fail-on", "low")
+    assert result.returncode == 2
 
 
 def test_cli_rejects_unknown_fail_on_severity_with_exit_2(tmp_path):
