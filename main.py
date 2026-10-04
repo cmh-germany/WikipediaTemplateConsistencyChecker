@@ -26,7 +26,7 @@ import parse
 import report
 import rules
 
-__version__ = "0.2"
+__version__ = "0.3"
 
 # Process exit codes. EXIT_ERROR deliberately matches argparse's own
 # exit code for invalid arguments, so CI can treat "the tool couldn't do
