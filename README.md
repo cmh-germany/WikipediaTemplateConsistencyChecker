@@ -310,26 +310,31 @@ and [Rule Validation](#rule-validation) below._
 
 ### Exit Codes (CI Usage)
 
-By default, findings never affect the exit code, so a normal run always
-ends with `0` unless something went wrong. To use the tool as an automated
-gate — e.g. in a CI pipeline or a pre-publish check — add
-`--fail-on SEVERITY` to either mode. The run then ends with exit code `1`
-if at least one finding has that [severity](#severity-levels) or higher.
-`SEVERITY` is one of `low`, `medium`, `high`, or `very-high`, and `low`
-fails on any finding at all:
+Like many linters, the tool reports through its exit code whether it
+found anything, so it can be used as an automated gate — e.g. in a CI
+pipeline or a pre-publish check — without parsing its output. By
+default, a run ends with exit code `1` if there is **any** finding.
+`--fail-on SEVERITY` (in either mode) raises that bar: the run then only
+ends with `1` if at least one finding has that
+[severity](#severity-levels) or higher. `SEVERITY` is one of `low` (the
+default — any finding), `medium`, `high`, `very-high`, or `none`, which
+switches this off so a completed run always ends with `0`:
 
 ```sh
 python main.py --check my_draft.wikitext --fail-on high   # fail on high or very high findings
 python main.py --scan --fail-on very-high                 # fail only on logical contradictions
+python main.py --scan --fail-on none                      # never fail because of findings
 ```
 
 | Exit code | Meaning |
 |---|---|
-| `0` | Run completed; no finding reached the `--fail-on` severity (or `--fail-on` wasn't given) |
-| `1` | A finding reached the `--fail-on` severity, **or** the run failed (article/infobox not found, draft file unreadable, report couldn't be written) |
-| `2` | Invalid command-line arguments (e.g. an unknown `--fail-on` severity) |
+| `0` | Run completed; no finding reached the `--fail-on` severity (by default: no findings at all) |
+| `1` | Run completed, and at least one finding reached the `--fail-on` severity |
+| `2` | The run failed (article/infobox not found, draft file unreadable, report couldn't be written) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity) |
 
-The findings are still printed in full, and with `--scan` the HTML report
+If you're not using the tool in an automated setup, you can ignore the
+exit code entirely — a `1` does **not** mean the tool crashed. The
+findings are still printed in full, and with `--scan` the HTML report
 is still written (and opened with `--open`) before the run ends with `1`.
 When a run fails because of findings, it also prints a one-line
 explanation to stderr, e.g.
