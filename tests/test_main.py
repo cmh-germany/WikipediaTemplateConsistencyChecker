@@ -413,7 +413,7 @@ def test_scan_invokes_run_scan_with_defaults(monkeypatch):
         "use_cache": True,
         "open_output": False,
         "overwrite_cache": False,
-        "fail_on": "low",
+        "finding_filter": main.rules.FindingFilter(),
     }
 
 
@@ -441,7 +441,7 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
         "use_cache": False,
         "open_output": True,
         "overwrite_cache": False,
-        "fail_on": "low",
+        "finding_filter": main.rules.FindingFilter(),
     }
 
 
@@ -898,7 +898,7 @@ def test_scan_passes_through_fail_on(monkeypatch):
     calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
-    assert calls["fail_on"] == "very high"
+    assert calls["finding_filter"].fail_on == "very high"
 
 
 def test_scan_fail_on_none_passes_none(monkeypatch):
@@ -906,7 +906,7 @@ def test_scan_fail_on_none_passes_none(monkeypatch):
     calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
-    assert calls["fail_on"] is None
+    assert calls["finding_filter"].fail_on is None
 
 
 def test_check_defaults_to_fail_on_low(monkeypatch):
@@ -916,7 +916,7 @@ def test_check_defaults_to_fail_on_low(monkeypatch):
         main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
     )
     main.main()
-    assert calls["fail_on"] == "low"
+    assert calls["finding_filter"].fail_on == "low"
 
 
 def test_check_passes_through_fail_on(monkeypatch):
@@ -926,7 +926,7 @@ def test_check_passes_through_fail_on(monkeypatch):
         main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
     )
     main.main()
-    assert calls["fail_on"] == "low"
+    assert calls["finding_filter"].fail_on == "low"
 
 
 @pytest.mark.parametrize(
@@ -936,7 +936,12 @@ def test_check_passes_through_fail_on(monkeypatch):
 def test_run_check_exit_code_respects_fail_on(tmp_path, fail_on, expected):
     path = tmp_path / "draft.wikitext"
     path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
-    assert main.run_check(str(path), fail_on=fail_on) == expected
+    assert (
+        main.run_check(
+            str(path), finding_filter=main.rules.FindingFilter(fail_on=fail_on)
+        )
+        == expected
+    )
 
 
 def test_run_check_fails_on_any_finding_by_default(tmp_path):
@@ -960,7 +965,7 @@ def test_run_scan_without_findings_exits_0_by_default(monkeypatch, tmp_path):
 def test_run_check_fail_on_still_prints_findings(tmp_path, capsys):
     path = tmp_path / "draft.wikitext"
     path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
-    main.run_check(str(path), fail_on="low")
+    main.run_check(str(path), finding_filter=main.rules.FindingFilter(fail_on="low"))
     assert "death_date_with_non_deceased_status" in capsys.readouterr().out
 
 
@@ -970,7 +975,10 @@ def test_run_check_fail_on_still_prints_findings(tmp_path, capsys):
 )
 def test_run_scan_exit_code_respects_fail_on(monkeypatch, tmp_path, fail_on, expected):
     _stub_scan_with_high_and_low_findings(monkeypatch)
-    result = main.run_scan(output=str(tmp_path / "report.html"), fail_on=fail_on)
+    result = main.run_scan(
+        output=str(tmp_path / "report.html"),
+        finding_filter=main.rules.FindingFilter(fail_on=fail_on),
+    )
     assert result == expected
 
 
@@ -981,7 +989,11 @@ def test_run_scan_fail_on_still_writes_and_opens_report(monkeypatch, tmp_path):
     monkeypatch.setattr(main.webbrowser, "open", opened_urls.append)
     output = tmp_path / "report.html"
 
-    result = main.run_scan(output=str(output), open_output=True, fail_on="low")
+    result = main.run_scan(
+        output=str(output),
+        open_output=True,
+        finding_filter=main.rules.FindingFilter(fail_on="low"),
+    )
 
     assert result == 1
     assert output.is_file()
@@ -999,7 +1011,10 @@ def test_run_scan_report_write_failure_still_returns_2_with_fail_on(
     monkeypatch.setattr(main.report, "generate_html_report", raise_permission_error)
 
     assert (
-        main.run_scan(output="Z:/no_access/report.html", fail_on="low")
+        main.run_scan(
+            output="Z:/no_access/report.html",
+            finding_filter=main.rules.FindingFilter(fail_on="low"),
+        )
         == main.EXIT_ERROR
     )
     assert "Could not write report" in capsys.readouterr().out

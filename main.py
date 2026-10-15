@@ -10,9 +10,11 @@ Two modes:
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
 
-Exit codes: 0 = no finding at or above --fail-on SEVERITY (default:
-low, i.e. any finding; "none" disables this), 1 = such findings
-present, 2 = the run failed or the arguments were invalid.
+--fail-on SEVERITY (default: low, i.e. everything) hides findings
+below SEVERITY from the console and the report ("none" hides nothing
+and never fails). Exit codes: 0 = no finding at or above --fail-on
+SEVERITY, 1 = such findings present, 2 = the run failed or the
+arguments were invalid.
 """
 
 import argparse
@@ -174,13 +176,17 @@ def _print_findings(title, findings):
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
-def run_check(target, session=None, fail_on: str | None = DEFAULT_FAIL_ON) -> int:
+def run_check(
+    target, session=None, finding_filter: rules.FindingFilter | None = None
+) -> int:
     """Checks a single article (title/URL) or local wikitext file and
-    prints its findings to the console. Returns a process exit code:
-    EXIT_ERROR if the target/template couldn't be resolved, else
-    EXIT_FINDINGS if `fail_on` is set and a finding reaches that
-    severity, else EXIT_OK."""
+    prints the findings `finding_filter` keeps (default: all) to the
+    console. Returns a process exit code: EXIT_ERROR if the
+    target/template couldn't be resolved, else EXIT_FINDINGS if the
+    filter's `fail_on` is set and a kept finding reaches that severity,
+    else EXIT_OK."""
     session = session or fetch.get_session()
+    finding_filter = finding_filter or rules.FindingFilter()
 
     print(f"Checking '{_sanitize_console_text(target)}' ...")
 
@@ -228,14 +234,18 @@ def run_check(target, session=None, fail_on: str | None = DEFAULT_FAIL_ON) -> in
     if discipline:
         discipline_exists = fetch.templates_exist(session, [discipline])
 
-    findings = rules.run_all_checks(
-        params,
-        categories=categories,
-        nation_exists=nation_exists,
-        discipline_exists=discipline_exists,
+    findings = finding_filter.apply(
+        rules.run_all_checks(
+            params,
+            categories=categories,
+            nation_exists=nation_exists,
+            discipline_exists=discipline_exists,
+        )
     )
     _print_findings(title, findings)
-    return _findings_exit_code(rules.count_by_severity(findings), fail_on)
+    return _findings_exit_code(
+        rules.count_by_severity(findings), finding_filter.fail_on
+    )
 
 
 def _warn_if_cache_stale(use_cache: bool, overwrite_cache: bool) -> None:
@@ -280,16 +290,18 @@ def run_scan(
     use_cache=True,
     open_output=False,
     overwrite_cache=False,
-    fail_on: str | None = DEFAULT_FAIL_ON,
+    finding_filter: rules.FindingFilter | None = None,
 ) -> int:
     """Fetches all articles embedding the template, runs the rule checks
-    across the whole corpus, and writes the HTML report. Returns a
-    process exit code: EXIT_ERROR if the report couldn't be written,
-    else EXIT_FINDINGS if `fail_on` is set and a finding reaches that
-    severity, else EXIT_OK. Findings are checked only after the report
-    is written and opened, so a failing CI run still leaves the report
-    behind."""
+    across the whole corpus, and writes the HTML report with the
+    findings `finding_filter` keeps (default: all). Returns a process
+    exit code: EXIT_ERROR if the report couldn't be written, else
+    EXIT_FINDINGS if the filter's `fail_on` is set and a kept finding
+    reaches that severity, else EXIT_OK. Findings are checked only
+    after the report is written and opened, so a failing CI run still
+    leaves the report behind."""
     session = fetch.get_session()
+    finding_filter = finding_filter or rules.FindingFilter()
 
     _warn_if_cache_stale(use_cache, overwrite_cache)
 
@@ -327,11 +339,13 @@ def run_scan(
     print("Running rule checks ...")
     results = {}
     for title, (params, categories) in parsed.items():
-        results[title] = rules.run_all_checks(
-            params,
-            categories=categories,
-            nation_exists=nation_exists,
-            discipline_exists=discipline_exists,
+        results[title] = finding_filter.apply(
+            rules.run_all_checks(
+                params,
+                categories=categories,
+                nation_exists=nation_exists,
+                discipline_exists=discipline_exists,
+            )
         )
 
     output_path = os.path.abspath(output)
@@ -356,7 +370,7 @@ def run_scan(
         webbrowser.open(f"file://{output_path}")
         print("Opened report.")
 
-    return _findings_exit_code(counts, fail_on)
+    return _findings_exit_code(counts, finding_filter.fail_on)
 
 
 def main():
@@ -416,13 +430,16 @@ def main():
         type=_severity,
         metavar="SEVERITY",
         default=DEFAULT_FAIL_ON,
-        help="Exit with code 1 if any finding has this severity or higher "
+        help="Only show findings with this severity or higher (in the "
+        "console and the report), and exit with code 1 if any are left "
         "(one of: low, medium, high, very-high, none). Default: low, i.e. "
-        "exit with code 1 on any finding. Use 'none' to always exit with "
-        "code 0 when the run completes, regardless of findings. Errors "
-        "(e.g. article not found) always exit with code 2",
+        "show every finding and exit with code 1 on any finding. Use "
+        "'none' to show every finding but always exit with code 0 when "
+        "the run completes. Errors (e.g. article not found) always exit "
+        "with code 2",
     )
     args = parser.parse_args()
+    finding_filter = rules.FindingFilter(fail_on=args.fail_on)
 
     # args.check is "" (falsy, but not None) when the user passes
     # --check with an empty/whitespace-only value -- reject it
@@ -432,7 +449,7 @@ def main():
         parser.error("--check TARGET must not be empty")
 
     if args.check:
-        return run_check(args.check, fail_on=args.fail_on)
+        return run_check(args.check, finding_filter=finding_filter)
 
     output_error = _check_output_path(args.output)
     if output_error:
@@ -444,7 +461,7 @@ def main():
         use_cache=not args.no_cache,
         open_output=args.open,
         overwrite_cache=args.overwrite_cache,
-        fail_on=args.fail_on,
+        finding_filter=finding_filter,
     )
 
 
