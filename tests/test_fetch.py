@@ -4,7 +4,9 @@ corruption recovery on load and atomic, non-interleaving writes on save
 -- fetch_pages_content_and_categories's per-batch progress output
 (see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/9)
 -- and cache age detection plus fetch_all_with_cache's overwrite_cache
-option (see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/20)."""
+option (see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/20)
+-- and request pacing plus maxlag handling (see
+https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/17)."""
 
 import glob
 import json
@@ -12,6 +14,7 @@ import os
 import time
 
 import pytest
+import requests
 
 import fetch
 
@@ -428,6 +431,136 @@ def test_fetch_all_with_cache_overwrite_cache_preserves_untouched_entries(
     )
 
     assert fetch.load_cache()["Untouched Athlete"]["wikitext"] == "keep me"
+
+
+# ---------------------------------------------------------------------
+# Request pacing and maxlag (issue #17)
+# ---------------------------------------------------------------------
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, data=None, headers=None):
+        self.status_code = status_code
+        self._data = data if data is not None else {}
+        self.headers = headers or {}
+
+    def json(self):
+        return self._data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
+
+
+class FakeSession:
+    """Returns the queued responses in order and records the params of
+    every request, standing in for a requests.Session."""
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.requests: list[dict] = []
+
+    def get(self, url, params=None, timeout=None):
+        self.requests.append(dict(params))
+        return self.responses.pop(0)
+
+
+MAXLAG_ERROR = {"error": {"code": "maxlag", "info": "Waiting for a database"}}
+
+
+@pytest.fixture
+def throttle_calls(monkeypatch):
+    """Replaces the real pacing with recorders, so tests neither sleep
+    nor depend on the lock file, and can assert every call made."""
+    calls: dict[str, list] = {"wait_for_turn": [], "back_off": []}
+    monkeypatch.setattr(
+        fetch.throttle, "wait_for_turn", lambda: calls["wait_for_turn"].append(None)
+    )
+    monkeypatch.setattr(
+        fetch.throttle, "back_off", lambda seconds: calls["back_off"].append(seconds)
+    )
+    return calls
+
+
+def test_api_query_sends_maxlag(throttle_calls):
+    session = FakeSession([FakeResponse(data={"query": {}})])
+    fetch._api_query(session, {"action": "query"})
+    assert session.requests[0]["maxlag"] == fetch.MAXLAG_SECONDS == 5
+
+
+def test_maxlag_error_is_retried_with_retry_after(throttle_calls):
+    session = FakeSession(
+        [
+            FakeResponse(data=MAXLAG_ERROR, headers={"Retry-After": "7"}),
+            FakeResponse(data={"query": {"embeddedin": [{"title": "A"}]}}),
+        ]
+    )
+
+    query = fetch._api_query(session, {"action": "query"})
+
+    assert query == {"embeddedin": [{"title": "A"}]}
+    assert throttle_calls["back_off"] == [7.0]
+
+
+def test_maxlag_error_without_retry_after_uses_exponential_delay(throttle_calls):
+    session = FakeSession(
+        [
+            FakeResponse(data=MAXLAG_ERROR),
+            FakeResponse(data=MAXLAG_ERROR),
+            FakeResponse(data={"query": {}}),
+        ]
+    )
+    fetch._api_query(session, {"action": "query"})
+    assert throttle_calls["back_off"] == [2.0, 4.0]
+
+
+def test_persistent_maxlag_raises_plain_language_error(throttle_calls):
+    session = FakeSession([FakeResponse(data=MAXLAG_ERROR)] * fetch.MAX_RETRIES)
+
+    with pytest.raises(RuntimeError, match="overloaded"):
+        fetch._api_query(session, {"action": "query"})
+
+    assert len(session.requests) == fetch.MAX_RETRIES
+
+
+def test_other_api_errors_are_not_retried(throttle_calls):
+    session = FakeSession([FakeResponse(data={"error": {"code": "badvalue"}})])
+
+    with pytest.raises(RuntimeError, match="MediaWiki API error"):
+        fetch._api_query(session, {"action": "query"})
+
+    assert throttle_calls["back_off"] == []
+
+
+def test_too_many_requests_backs_off_via_throttle(throttle_calls):
+    session = FakeSession(
+        [
+            FakeResponse(status_code=429, headers={"Retry-After": "3"}),
+            FakeResponse(data={"query": {}}),
+        ]
+    )
+    fetch._api_query(session, {"action": "query"})
+    assert throttle_calls["back_off"] == [3.0]
+
+
+def test_persistent_server_error_raises_http_error(throttle_calls):
+    session = FakeSession([FakeResponse(status_code=503)] * fetch.MAX_RETRIES)
+    with pytest.raises(requests.HTTPError):
+        fetch._api_query(session, {"action": "query"})
+
+
+def test_every_request_waits_for_its_turn(throttle_calls):
+    """Retries and continuation requests are paced too, not just the
+    first request of each query."""
+    session = FakeSession(
+        [
+            FakeResponse(status_code=429),
+            FakeResponse(data={"query": {}, "continue": {"eicontinue": "x"}}),
+            FakeResponse(data={"query": {}}),
+        ]
+    )
+    fetch._api_query(session, {"action": "query"})
+    assert len(throttle_calls["wait_for_turn"]) == len(session.requests) == 3
 
 
 def test_save_cache_is_atomic_and_leaves_valid_json_on_repeated_writes(cache_file):

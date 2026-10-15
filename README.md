@@ -52,6 +52,7 @@
       <a href="#usage">Usage</a>
       <ul>
         <li><a href="#exit-codes-ci-usage">Exit Codes (CI Usage)</a></li>
+        <li><a href="#running-several-scans-at-once">Running Several Scans at Once</a></li>
         <li><a href="#severity-levels">Severity Levels</a></li>
       </ul>
     </li>
@@ -247,7 +248,8 @@ untimestamped, so the console instead warns that their age can't be
 checked and suggests `--overwrite-cache`; each entry is then upgraded
 in place, lazily, the next time it's actually (re)fetched. Writes to
 `cache.json` are atomic, so running two scans at the same time won't
-corrupt it; if it's ever found corrupted anyway (e.g. an interrupted
+corrupt it (and they share one request budget towards Wikipedia, see
+[Running Several Scans at Once](#running-several-scans-at-once)); if it's ever found corrupted anyway (e.g. an interrupted
 write from an older version of this tool), it's treated as empty and
 rebuilt rather than crashing the run. A collapsible
 list of every scanned article, with its finding count, is always included
@@ -346,6 +348,36 @@ so the reason is visible in a CI log. Example GitHub Actions step:
   run: python main.py --check drafts/athlete.wikitext --fail-on high
 ```
 
+### Running Several Scans at Once
+
+The tool is a guest on Wikipedia's servers and paces itself accordingly:
+it sends at most one API request every 0.5 seconds — and that limit is
+shared by **every run of the tool on the same computer**, not applied
+per run. Each run reserves its next request slot in a small coordination
+file in your system's temp folder (`WikipediaTemplateChecker-api.lock`),
+so if you start a second scan, or a `--check`, while another scan is
+still running, both keep working but each gets correspondingly slower,
+instead of together putting twice the load on Wikipedia. You don't need
+to do anything for this, and it's safe to delete that file whenever no
+run is active (it's recreated automatically).
+
+The tool also follows MediaWiki's
+[`maxlag` convention](https://www.mediawiki.org/wiki/Manual:Maxlag_parameter):
+every request tells Wikipedia to refuse it while its servers are under
+heavy load (database replication more than 5 seconds behind). When that
+happens — or Wikipedia answers "429 Too Many Requests" or a server error
+— the tool waits (as long as Wikipedia asks it to, otherwise with
+increasing pauses) and tries again, and that pause applies to all runs
+on the same computer. If the servers stay overloaded after several
+attempts, the run stops with
+`Wikipedia's servers are currently overloaded (maxlag) -- please try again in a few minutes.`
+
+This coordination only works between runs on the **same computer**.
+Separate machines — e.g. several CI jobs running in parallel — don't
+know about each other, so please don't fan a scan out across many
+machines at once; a single scan (re-run with `cache.json` kept) is
+enough.
+
 ### Severity Levels
 
 | Level | Meaning |
@@ -372,7 +404,8 @@ python -m pytest
 ```
 
 The suite (`tests/test_parse.py`, `tests/test_rules.py`,
-`tests/test_main.py`) uses real Infobox Leichtathlet snapshots
+`tests/test_main.py`, `tests/test_report.py`, `tests/test_fetch.py`,
+`tests/test_throttle.py`) uses real Infobox Leichtathlet snapshots
 captured from live articles (`tests/fixtures/`) as well as
 hand-crafted edge cases, but does not make any network calls itself
 (all `fetch.py` calls are mocked). It's basic coverage -- organized so
@@ -382,7 +415,9 @@ every individual rule, and so every CLI flag (`--scan`, `--check`,
 `--fail-on`) is exercised at least once -- rather than an exhaustive
 suite. The `--fail-on` exit codes are additionally checked end-to-end by
 running the CLI in a subprocess against a local draft file, which needs
-no network access either.
+no network access either, and the shared request pacing is checked by
+running several worker processes against one coordination file (using a
+throwaway file, never the real one in the temp folder).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -417,7 +452,15 @@ no network access either.
   articles at a deliberately throttled pace and can take several
   minutes, especially before `cache.json` is populated; this is expected.
   Run `python main.py --scan --limit 50` first to confirm the tool works
-  before committing to a full scan.
+  before committing to a full scan. It's slower still while another run
+  of the tool is active on the same computer, since all runs share one
+  request budget (see
+  [Running Several Scans at Once](#running-several-scans-at-once)).
+* **`Wikipedia's servers are currently overloaded (maxlag)`** —
+  Wikipedia asked the tool to back off repeatedly because its servers
+  are under heavy load. Nothing is wrong on your side; wait a few
+  minutes and run the same command again (already fetched articles are
+  kept in `cache.json`).
 * **Something else / a rule looks wrong** — please
   [open an issue](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues)
   with the command you ran and the full error message or article title.
@@ -431,7 +474,10 @@ no network access either.
 
 * `fetch.py` -- access to the MediaWiki API (article list, wikitext,
   categories, existence check for nation templates), with a local cache
-  and age tracking for that cache
+  and age tracking for that cache; honors MediaWiki's `maxlag`
+* `throttle.py` -- paces API requests across all runs on the same
+  machine via a shared lock file, see
+  [Running Several Scans at Once](#running-several-scans-at-once)
 * `parse.py` -- extracts the infobox parameters from the wikitext
   (`mwparserfromhell`) and parses (possibly incomplete) date values
 * `rules.py` -- the rule set
