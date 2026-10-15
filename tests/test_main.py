@@ -1069,6 +1069,137 @@ def test_run_scan_report_write_failure_still_returns_2_with_fail_on(
     assert "Could not write report" in capsys.readouterr().out
 
 
+# ---------------------------------------------------------------------
+# --disable-rule (issue #10)
+# ---------------------------------------------------------------------
+
+
+def test_rule_ids_type_splits_on_commas_and_strips_whitespace():
+    assert main._rule_ids("missing_birthplace, update_outdated") == [
+        "missing_birthplace",
+        "update_outdated",
+    ]
+
+
+def test_rule_ids_type_accepts_hyphens_and_capitals():
+    assert main._rule_ids("Missing-Birthplace") == ["missing_birthplace"]
+
+
+def test_rule_ids_type_rejects_unknown_id_with_suggestion():
+    with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
+        main._rule_ids("missing_birthplac")
+    message = str(exc_info.value)
+    assert "unknown rule ID 'missing_birthplac'" in message
+    assert "did you mean 'missing_birthplace'?" in message
+
+
+def test_rule_ids_type_rejects_unknown_id_without_close_match():
+    with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
+        main._rule_ids("xyz")
+    message = str(exc_info.value)
+    assert "unknown rule ID 'xyz'" in message
+    assert "did you mean" not in message
+
+
+@pytest.mark.parametrize("value", ["", "missing_birthplace,", "a,,b"])
+def test_rule_ids_type_rejects_empty_items(value):
+    with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
+        main._rule_ids(value)
+    assert "empty rule ID" in str(exc_info.value)
+
+
+def test_disable_rule_repeated_flags_are_merged(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--scan",
+            "--disable-rule",
+            "missing_birthplace,update_outdated",
+            "--disable-rule",
+            "height_implausible",
+            "--fail-on",
+            "high",
+        ],
+    )
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
+    main.main()
+    assert calls["finding_filter"] == main.rules.FindingFilter(
+        disabled_rules=frozenset(
+            {"missing_birthplace", "update_outdated", "height_implausible"}
+        ),
+        fail_on="high",
+    )
+
+
+def test_check_passes_disabled_rules_to_run_check(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["main.py", "--check", "X", "--disable-rule", "update_outdated"]
+    )
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(
+        main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
+    )
+    main.main()
+    assert calls["finding_filter"].disabled_rules == {"update_outdated"}
+
+
+def test_disable_rule_rejects_unknown_id_before_running(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--disable-rule", "bogus"])
+    calls: list[dict] = []
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
+    with pytest.raises(SystemExit) as exc_info:
+        main.main()
+    assert exc_info.value.code == 2
+    assert calls == []
+
+
+def test_run_check_disabled_rule_is_not_printed_and_does_not_fail(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"missing_birthplace"})
+    )
+    result = main.run_check(str(path), finding_filter=finding_filter)
+    out = capsys.readouterr().out
+    assert result == main.EXIT_OK
+    assert "missing_birthplace" not in out
+    assert "No findings." in out
+
+
+def test_run_check_disabled_rule_combined_with_fail_on(tmp_path, capsys):
+    # The high finding is disabled and the low one is below --fail-on,
+    # so nothing is left.
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"death_date_with_non_deceased_status"}),
+        fail_on="medium",
+    )
+    assert main.run_check(str(path), finding_filter=finding_filter) == main.EXIT_OK
+    assert "No findings." in capsys.readouterr().out
+
+
+def test_run_scan_disabled_rule_is_left_out_of_report(monkeypatch, capsys, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"death_date_with_non_deceased_status"})
+    )
+
+    result = main.run_scan(output=str(output), finding_filter=finding_filter)
+
+    assert result == main.EXIT_FINDINGS  # the low finding is still there
+    assert "Total findings: 1 (Very high: 0, High: 0, Medium: 0, Low: 1)" in (
+        capsys.readouterr().out
+    )
+    report_html = output.read_text(encoding="utf-8")
+    assert "missing_birthplace" in report_html
+    assert "death_date_with_non_deceased_status" not in report_html
+
+
 # Integration: the real CLI in a subprocess, so the exit code that
 # actually reaches the shell (via sys.exit(main())) is what's asserted.
 # --check on a local file with no nation/disziplin makes no network calls.
@@ -1132,3 +1263,16 @@ def test_cli_rejects_unknown_fail_on_severity_with_exit_2(tmp_path):
     result = _run_cli("--check", "whatever", "--fail-on", "critical")
     assert result.returncode == 2
     assert "unknown severity 'critical'" in result.stderr
+
+
+def test_cli_rejects_unknown_rule_id_with_exit_2():
+    result = _run_cli("--check", "whatever", "--disable-rule", "missing-birthplac")
+    assert result.returncode == 2
+    assert "did you mean 'missing_birthplace'?" in result.stderr
+
+
+def test_cli_check_disabling_the_only_firing_rule_exits_0(tmp_path):
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    result = _run_cli("--check", str(path), "--disable-rule", "missing_birthplace")
+    assert result.returncode == 0, result.stdout + result.stderr
