@@ -484,6 +484,12 @@ no network access either, and the shared request pacing is checked by
 running several worker processes against one coordination file (using a
 throwaway file, never the real one in the temp folder).
 
+The same checks run automatically on GitHub Actions
+(`.github/workflows/ci.yml`) for every push to `main` and every pull
+request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
+`mypy`, and the test suite, which fails if overall coverage drops below
+80%.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
@@ -551,6 +557,8 @@ throwaway file, never the real one in the temp folder).
   `$placeholder` syntax)
 * `main.py` -- command-line entry point
 * `tests/` -- automated test suite (pytest), see [Running Tests](#running-tests)
+* `.github/workflows/ci.yml` -- GitHub Actions workflow running lint, type
+  checks, and tests on every push and pull request
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
