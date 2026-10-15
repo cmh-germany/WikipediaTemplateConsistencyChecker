@@ -15,6 +15,8 @@ from typing import Any
 
 import requests
 
+import throttle
+
 API_URL = "https://de.wikipedia.org/w/api.php"
 
 # Wikipedia's policy requires a descriptive User-Agent with a way to
@@ -30,9 +32,6 @@ CACHE_FILE = os.path.join(os.path.dirname(__file__), "cache.json")
 # cache_age_days()).
 CACHE_STALE_AGE_DAYS = 30
 
-# Short delay between batch requests to avoid overloading the API.
-REQUEST_DELAY_SECONDS = 0.5
-
 # Titles per API call when fetching wikitext/categories.
 BATCH_SIZE = 50
 
@@ -46,16 +45,20 @@ def get_session():
 
 
 def _get_with_retry(session, params):
-    """GET with backoff on 429 (Too Many Requests) / 5xx errors."""
+    """GET with backoff on 429 (Too Many Requests) / 5xx errors. Every
+    request -- including retries -- waits for its turn in the
+    machine-wide pacing shared with other runs of this tool, and a
+    backoff delays those other runs as well (see throttle.py)."""
     delay = 2.0
     for attempt in range(MAX_RETRIES):
+        throttle.wait_for_turn()
         response = session.get(API_URL, params=params, timeout=30)
         if response.status_code == 429 or response.status_code >= 500:
             retry_after = response.headers.get("Retry-After")
             wait = float(retry_after) if retry_after else delay
             if attempt == MAX_RETRIES - 1:
                 response.raise_for_status()
-            time.sleep(wait)
+            throttle.back_off(wait)
             delay *= 2
             continue
         response.raise_for_status()
@@ -89,7 +92,6 @@ def _api_query(session, params, stop_when=None):
 
         if "continue" in data:
             params.update(data["continue"])
-            time.sleep(REQUEST_DELAY_SECONDS)
         else:
             break
 
@@ -175,7 +177,6 @@ def fetch_pages_content_and_categories(session, titles):
             result[title] = {"wikitext": wikitext, "categories": categories}
         done += len(batch)
         print(f"{done}/{total} articles fetched")
-        time.sleep(REQUEST_DELAY_SECONDS)
     return result
 
 
@@ -194,7 +195,6 @@ def templates_exist(session, template_titles):
         query = _api_query(session, params)
         for title, page in query.get("pages", {}).items():
             exists[title] = not page.get("missing", False)
-        time.sleep(REQUEST_DELAY_SECONDS)
     return exists
 
 
