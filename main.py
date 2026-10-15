@@ -152,6 +152,25 @@ def _format_severity_summary(counts: dict[str, int]) -> str:
     return f"Total findings: {total} ({breakdown})"
 
 
+def _describe_filter(finding_filter: rules.FindingFilter) -> str | None:
+    """One-line description of an active --fail-on/--disable-rule
+    filter for the console and the report, so a filtered (shorter)
+    result isn't mistaken for a cleaner one. None if nothing is hidden
+    (--fail-on low or none, no disabled rules)."""
+    parts = []
+    if finding_filter.fail_on not in (None, rules.LOW):
+        parts.append(
+            f"showing only findings at or above '{finding_filter.fail_on}' "
+            "severity (--fail-on)"
+        )
+    if finding_filter.disabled_rules:
+        disabled = ", ".join(sorted(finding_filter.disabled_rules))
+        parts.append(f"hiding findings of rule(s) {disabled} (--disable-rule)")
+    if not parts:
+        return None
+    return f"Filter active: {'; '.join(parts)}."
+
+
 def _findings_exit_code(counts: dict[str, int], fail_on: str | None) -> int:
     """Returns EXIT_FINDINGS if --fail-on is set and at least one
     finding is at or above that severity, else EXIT_OK -- so CI jobs
@@ -218,6 +237,8 @@ def run_check(
     finding_filter = finding_filter or rules.FindingFilter()
 
     print(f"Checking '{_sanitize_console_text(target)}' ...")
+    if filter_note := _describe_filter(finding_filter):
+        print(filter_note)
 
     if os.path.isfile(target):
         try:
@@ -339,6 +360,9 @@ def run_scan(
     finding_filter = finding_filter or rules.FindingFilter()
 
     _warn_if_cache_stale(use_cache, overwrite_cache)
+    filter_note = _describe_filter(finding_filter)
+    if filter_note:
+        print(filter_note)
 
     print("Fetching articles that embed the template ...")
     titles = fetch.list_pages_using_template(session, limit=limit)
@@ -392,7 +416,9 @@ def run_scan(
     output_path = os.path.abspath(output)
     print(f"Writing report to '{output_path}' ...")
     try:
-        report.generate_html_report(results, output, n_scanned=len(parsed))
+        report.generate_html_report(
+            results, output, n_scanned=len(parsed), filter_note=filter_note
+        )
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
         return EXIT_ERROR
