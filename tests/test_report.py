@@ -90,6 +90,23 @@ def test_note_column_shows_dash_when_absent(tmp_path):
     assert html.count("&ndash;</td>") == 2
 
 
+def test_filter_note_shown_and_escaped_when_given(tmp_path):
+    output = tmp_path / "report.html"
+
+    generate_html_report({"Article A": []}, str(output), filter_note="Filter <x>")
+
+    html = output.read_text(encoding="utf-8")
+    assert '<div class="filter-note">Filter &lt;x&gt;</div>' in html
+
+
+def test_filter_note_absent_by_default(tmp_path):
+    output = tmp_path / "report.html"
+
+    generate_html_report({"Article A": []}, str(output))
+
+    assert '<div class="filter-note">' not in output.read_text(encoding="utf-8")
+
+
 def test_filter_checkboxes_count_across_all_articles_not_just_first(tmp_path):
     # Regression guard: severity_counts must be built from every
     # article's findings, not e.g. accidentally only the last one

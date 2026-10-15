@@ -10,12 +10,17 @@ Two modes:
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
 
-Exit codes: 0 = no finding at or above --fail-on SEVERITY (default:
-low, i.e. any finding; "none" disables this), 1 = such findings
-present, 2 = the run failed or the arguments were invalid.
+Both modes accept --fail-on SEVERITY and --disable-rule RULE_ID[,...].
+
+--fail-on SEVERITY (default: low, i.e. everything) hides findings
+below SEVERITY from the console and the report ("none" hides nothing
+and never fails). Exit codes: 0 = no finding at or above --fail-on
+SEVERITY, 1 = such findings present, 2 = the run failed or the
+arguments were invalid.
 """
 
 import argparse
+import difflib
 import os
 import re
 import sys
@@ -83,6 +88,32 @@ def _severity(value: str) -> str | None:
     return severity
 
 
+def _rule_ids(value: str) -> list[str]:
+    """argparse type for --disable-rule. Accepts a comma-separated list
+    so several rules fit in one flag, and -- like _severity -- accepts
+    "-" in place of "_" so ids can be typed either way. Unknown ids are
+    rejected up front (with a "did you mean" hint for typos) rather
+    than silently ignored: a mistyped id would otherwise leave the rule
+    running, which looks exactly like the flag being broken."""
+    ids = [item.strip().lower().replace("-", "_") for item in value.split(",")]
+    if not all(ids):
+        raise argparse.ArgumentTypeError(
+            f"empty rule ID in '{value}' -- separate rule IDs with single "
+            "commas, e.g. missing_birthplace,update_outdated"
+        )
+    for rule_id in ids:
+        if rule_id in rules.RULE_TITLES:
+            continue
+        message = f"unknown rule ID '{rule_id}'"
+        if close := difflib.get_close_matches(rule_id, rules.RULE_TITLES, n=1):
+            message += f" -- did you mean '{close[0]}'?"
+        raise argparse.ArgumentTypeError(
+            f"{message} (see the list of rule IDs in the README, or the "
+            "rule ID shown next to each finding in --check output)"
+        )
+    return ids
+
+
 def _check_output_path(path):
     """Best-effort pre-flight check for --output, so an obviously bad
     path fails immediately instead of after a multi-minute scan.
@@ -119,6 +150,25 @@ def _format_severity_summary(counts: dict[str, int]) -> str:
         f"{severity.capitalize()}: {count}" for severity, count in counts.items()
     )
     return f"Total findings: {total} ({breakdown})"
+
+
+def _describe_filter(finding_filter: rules.FindingFilter) -> str | None:
+    """One-line description of an active --fail-on/--disable-rule
+    filter for the console and the report, so a filtered (shorter)
+    result isn't mistaken for a cleaner one. None if nothing is hidden
+    (--fail-on low or none, no disabled rules)."""
+    parts = []
+    if finding_filter.fail_on not in (None, rules.LOW):
+        parts.append(
+            f"showing only findings at or above '{finding_filter.fail_on}' "
+            "severity (--fail-on)"
+        )
+    if finding_filter.disabled_rules:
+        disabled = ", ".join(sorted(finding_filter.disabled_rules))
+        parts.append(f"hiding findings of rule(s) {disabled} (--disable-rule)")
+    if not parts:
+        return None
+    return f"Filter active: {'; '.join(parts)}."
 
 
 def _findings_exit_code(counts: dict[str, int], fail_on: str | None) -> int:
@@ -174,15 +224,21 @@ def _print_findings(title, findings):
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
-def run_check(target, session=None, fail_on: str | None = DEFAULT_FAIL_ON) -> int:
+def run_check(
+    target, session=None, finding_filter: rules.FindingFilter | None = None
+) -> int:
     """Checks a single article (title/URL) or local wikitext file and
-    prints its findings to the console. Returns a process exit code:
-    EXIT_ERROR if the target/template couldn't be resolved, else
-    EXIT_FINDINGS if `fail_on` is set and a finding reaches that
-    severity, else EXIT_OK."""
+    prints the findings `finding_filter` keeps (default: all) to the
+    console. Returns a process exit code: EXIT_ERROR if the
+    target/template couldn't be resolved, else EXIT_FINDINGS if the
+    filter's `fail_on` is set and a kept finding reaches that severity,
+    else EXIT_OK."""
     session = session or fetch.get_session()
+    finding_filter = finding_filter or rules.FindingFilter()
 
     print(f"Checking '{_sanitize_console_text(target)}' ...")
+    if filter_note := _describe_filter(finding_filter):
+        print(filter_note)
 
     if os.path.isfile(target):
         try:
@@ -216,26 +272,36 @@ def run_check(target, session=None, fail_on: str | None = DEFAULT_FAIL_ON) -> in
         print(f"No Infobox Leichtathlet embedding found in '{target}'.")
         return EXIT_ERROR
 
-    nation_codes = rules.nation_codes_to_check(params.get("nation", ""))
+    # The existence lookups are the only costly part of a rule, so skip
+    # them when the only rule needing them is disabled anyway.
+    nation_codes = []
+    if not finding_filter.is_disabled("nation_code_unknown"):
+        nation_codes = rules.nation_codes_to_check(params.get("nation", ""))
     nation_exists = None
     if nation_codes:
         nation_exists = fetch.templates_exist(
             session, [f"Vorlage:{code}" for code in nation_codes]
         )
 
-    discipline = rules.discipline_candidate(params.get("disziplin", ""))
+    discipline = None
+    if not finding_filter.is_disabled("discipline_link_unknown"):
+        discipline = rules.discipline_candidate(params.get("disziplin", ""))
     discipline_exists = None
     if discipline:
         discipline_exists = fetch.templates_exist(session, [discipline])
 
-    findings = rules.run_all_checks(
-        params,
-        categories=categories,
-        nation_exists=nation_exists,
-        discipline_exists=discipline_exists,
+    findings = finding_filter.apply(
+        rules.run_all_checks(
+            params,
+            categories=categories,
+            nation_exists=nation_exists,
+            discipline_exists=discipline_exists,
+        )
     )
     _print_findings(title, findings)
-    return _findings_exit_code(rules.count_by_severity(findings), fail_on)
+    return _findings_exit_code(
+        rules.count_by_severity(findings), finding_filter.fail_on
+    )
 
 
 def _warn_if_cache_stale(use_cache: bool, overwrite_cache: bool) -> None:
@@ -280,18 +346,23 @@ def run_scan(
     use_cache=True,
     open_output=False,
     overwrite_cache=False,
-    fail_on: str | None = DEFAULT_FAIL_ON,
+    finding_filter: rules.FindingFilter | None = None,
 ) -> int:
     """Fetches all articles embedding the template, runs the rule checks
-    across the whole corpus, and writes the HTML report. Returns a
-    process exit code: EXIT_ERROR if the report couldn't be written,
-    else EXIT_FINDINGS if `fail_on` is set and a finding reaches that
-    severity, else EXIT_OK. Findings are checked only after the report
-    is written and opened, so a failing CI run still leaves the report
-    behind."""
+    across the whole corpus, and writes the HTML report with the
+    findings `finding_filter` keeps (default: all). Returns a process
+    exit code: EXIT_ERROR if the report couldn't be written, else
+    EXIT_FINDINGS if the filter's `fail_on` is set and a kept finding
+    reaches that severity, else EXIT_OK. Findings are checked only
+    after the report is written and opened, so a failing CI run still
+    leaves the report behind."""
     session = fetch.get_session()
+    finding_filter = finding_filter or rules.FindingFilter()
 
     _warn_if_cache_stale(use_cache, overwrite_cache)
+    filter_note = _describe_filter(finding_filter)
+    if filter_note:
+        print(filter_note)
 
     print("Fetching articles that embed the template ...")
     titles = fetch.list_pages_using_template(session, limit=limit)
@@ -316,28 +387,38 @@ def run_scan(
         if discipline:
             all_disciplines.add(discipline)
 
-    print(f"Checking {len(all_nation_codes)} distinct nation codes ...")
-    nation_exists = fetch.templates_exist(
-        session, [f"Vorlage:{code}" for code in all_nation_codes]
-    )
+    # Skip the existence lookups (the only costly part of a rule) when
+    # the only rule needing them is disabled anyway.
+    nation_exists = None
+    if not finding_filter.is_disabled("nation_code_unknown"):
+        print(f"Checking {len(all_nation_codes)} distinct nation codes ...")
+        nation_exists = fetch.templates_exist(
+            session, [f"Vorlage:{code}" for code in all_nation_codes]
+        )
 
-    print(f"Checking {len(all_disciplines)} distinct bare discipline links ...")
-    discipline_exists = fetch.templates_exist(session, list(all_disciplines))
+    discipline_exists = None
+    if not finding_filter.is_disabled("discipline_link_unknown"):
+        print(f"Checking {len(all_disciplines)} distinct bare discipline links ...")
+        discipline_exists = fetch.templates_exist(session, list(all_disciplines))
 
     print("Running rule checks ...")
     results = {}
     for title, (params, categories) in parsed.items():
-        results[title] = rules.run_all_checks(
-            params,
-            categories=categories,
-            nation_exists=nation_exists,
-            discipline_exists=discipline_exists,
+        results[title] = finding_filter.apply(
+            rules.run_all_checks(
+                params,
+                categories=categories,
+                nation_exists=nation_exists,
+                discipline_exists=discipline_exists,
+            )
         )
 
     output_path = os.path.abspath(output)
     print(f"Writing report to '{output_path}' ...")
     try:
-        report.generate_html_report(results, output, n_scanned=len(parsed))
+        report.generate_html_report(
+            results, output, n_scanned=len(parsed), filter_note=filter_note
+        )
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
         return EXIT_ERROR
@@ -356,7 +437,7 @@ def run_scan(
         webbrowser.open(f"file://{output_path}")
         print("Opened report.")
 
-    return _findings_exit_code(counts, fail_on)
+    return _findings_exit_code(counts, finding_filter.fail_on)
 
 
 def main():
@@ -416,13 +497,34 @@ def main():
         type=_severity,
         metavar="SEVERITY",
         default=DEFAULT_FAIL_ON,
-        help="Exit with code 1 if any finding has this severity or higher "
+        help="Only show findings with this severity or higher (in the "
+        "console and the report), and exit with code 1 if any are left "
         "(one of: low, medium, high, very-high, none). Default: low, i.e. "
-        "exit with code 1 on any finding. Use 'none' to always exit with "
-        "code 0 when the run completes, regardless of findings. Errors "
-        "(e.g. article not found) always exit with code 2",
+        "show every finding and exit with code 1 on any finding. Use "
+        "'none' to show every finding but always exit with code 0 when "
+        "the run completes. Errors (e.g. article not found) always exit "
+        "with code 2",
+    )
+    parser.add_argument(
+        "--disable-rule",
+        type=_rule_ids,
+        action="append",
+        default=[],
+        metavar="RULE_ID[,RULE_ID...]",
+        help="Don't report findings of these rules (comma-separated, and "
+        "the flag can be repeated), e.g. --disable-rule "
+        "missing_birthplace,update_outdated. The rule ID is shown next to "
+        "each finding in --check output and in the report's Rule column; "
+        "the README lists all of them. Disabled findings never cause "
+        "exit code 1",
     )
     args = parser.parse_args()
+    finding_filter = rules.FindingFilter(
+        disabled_rules=frozenset(
+            rule_id for ids in args.disable_rule for rule_id in ids
+        ),
+        fail_on=args.fail_on,
+    )
 
     # args.check is "" (falsy, but not None) when the user passes
     # --check with an empty/whitespace-only value -- reject it
@@ -432,7 +534,7 @@ def main():
         parser.error("--check TARGET must not be empty")
 
     if args.check:
-        return run_check(args.check, fail_on=args.fail_on)
+        return run_check(args.check, finding_filter=finding_filter)
 
     output_error = _check_output_path(args.output)
     if output_error:
@@ -444,7 +546,7 @@ def main():
         use_cache=not args.no_cache,
         open_output=args.open,
         overwrite_cache=args.overwrite_cache,
-        fail_on=args.fail_on,
+        finding_filter=finding_filter,
     )
 
 

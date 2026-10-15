@@ -13,11 +13,14 @@ A fixed `today` is passed to run_all_checks throughout so date-based
 findings (birth/death/update in the future, outdated update, ...)
 don't depend on the wall-clock date the tests happen to run on."""
 
+import ast
 from datetime import date
+from pathlib import Path
 
 import pytest
 
-from rules import Finding, count_by_severity, run_all_checks
+import rules
+from rules import Finding, FindingFilter, count_by_severity, run_all_checks
 
 TODAY = date(2026, 8, 1)
 
@@ -493,3 +496,100 @@ def test_count_by_severity_result_is_in_severity_order():
     # to print severities from most to least severe without re-sorting.
     counts = count_by_severity([Finding("r1", "low", "m1")])
     assert list(counts) == ["very high", "high", "medium", "low"]
+
+
+# ---------------------------------------------------------------------
+# FindingFilter
+# ---------------------------------------------------------------------
+
+
+ONE_PER_SEVERITY = [
+    Finding("r_very_high", "very high", "m1"),
+    Finding("r_high", "high", "m2"),
+    Finding("r_medium", "medium", "m3"),
+    Finding("r_low", "low", "m4"),
+]
+
+
+def test_finding_filter_default_keeps_everything():
+    assert FindingFilter().apply(ONE_PER_SEVERITY) == ONE_PER_SEVERITY
+
+
+def test_finding_filter_fail_on_none_keeps_everything():
+    assert FindingFilter(fail_on=None).apply(ONE_PER_SEVERITY) == ONE_PER_SEVERITY
+
+
+@pytest.mark.parametrize(
+    ("fail_on", "expected_ids"),
+    [
+        ("low", ["r_very_high", "r_high", "r_medium", "r_low"]),
+        ("medium", ["r_very_high", "r_high", "r_medium"]),
+        ("high", ["r_very_high", "r_high"]),
+        ("very high", ["r_very_high"]),
+    ],
+)
+def test_finding_filter_fail_on_hides_lower_severities(fail_on, expected_ids):
+    kept = FindingFilter(fail_on=fail_on).apply(ONE_PER_SEVERITY)
+    assert [f.rule_id for f in kept] == expected_ids
+
+
+def test_finding_filter_drops_disabled_rules():
+    finding_filter = FindingFilter(disabled_rules=frozenset({"r_high", "r_low"}))
+    kept = finding_filter.apply(ONE_PER_SEVERITY)
+    assert [f.rule_id for f in kept] == ["r_very_high", "r_medium"]
+    assert finding_filter.is_disabled("r_high")
+    assert not finding_filter.is_disabled("r_medium")
+
+
+def test_finding_filter_combines_disabled_rules_and_fail_on():
+    finding_filter = FindingFilter(
+        disabled_rules=frozenset({"r_very_high"}), fail_on="high"
+    )
+    kept = finding_filter.apply(ONE_PER_SEVERITY)
+    assert [f.rule_id for f in kept] == ["r_high"]
+
+
+def test_finding_filter_on_real_findings(bolt_params):
+    # missing_birthplace (low) is the only finding once the birthplace
+    # fields are removed; hiding low findings or disabling the rule must
+    # both suppress it.
+    params = {**bolt_params, "geburtsort": "", "geburtsland": ""}
+    findings = check(params)
+    assert finding_ids(findings) == {"missing_birthplace"}
+    assert FindingFilter(fail_on="medium").apply(findings) == []
+    disabled = FindingFilter(disabled_rules=frozenset({"missing_birthplace"}))
+    assert disabled.apply(findings) == []
+
+
+def _emitted_rule_ids() -> set[str]:
+    """Collects every rule_id passed to a Finding(...) call in
+    rules.py, expanding the f"{label}_..." ids of
+    check_height_weight_plausibility for both of its labels."""
+    tree = ast.parse(Path(rules.__file__).read_text(encoding="utf-8"))
+    ids: set[str] = set()
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "Finding"
+        ):
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Constant):
+            ids.add(str(first.value))
+        else:
+            assert isinstance(first, ast.JoinedStr)
+            template = "".join(
+                str(part.value) if isinstance(part, ast.Constant) else "{label}"
+                for part in first.values
+            )
+            ids.update(template.format(label=label) for label in ("height", "weight"))
+    return ids
+
+
+def test_every_emitted_rule_id_has_a_title():
+    # --disable-rule validates against RULE_TITLES, so an emitted id
+    # missing there could never be disabled.
+    emitted = _emitted_rule_ids()
+    assert emitted
+    assert emitted <= set(rules.RULE_TITLES)

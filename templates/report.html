@@ -7,6 +7,7 @@
   body { font-family: system-ui, sans-serif; margin: 2em; color: #222; }
   h1 { margin-bottom: 0.2em; }
   .meta { color: #555; margin-bottom: 1.5em; }
+  .filter-note { margin-top: 0.5em; font-weight: bold; }
   .filters { margin-bottom: 1em; }
   .filters label, .filters .sev-empty { margin-right: 1.2em; display: inline-block; }
   .filters label { cursor: pointer; user-select: none; }
@@ -37,6 +38,7 @@
   $n_articles_with_findings of $n_scanned checked articles have findings &middot;
   $n_findings findings in total &middot;
   Rules based on <a href="$template_doc_url" target="_blank" rel="noopener">Vorlage:Infobox Leichtathlet</a>
+  $filter_note
 </div>
 <div class="filters">
   $filter_checkboxes

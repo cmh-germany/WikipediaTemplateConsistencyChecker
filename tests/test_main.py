@@ -413,7 +413,7 @@ def test_scan_invokes_run_scan_with_defaults(monkeypatch):
         "use_cache": True,
         "open_output": False,
         "overwrite_cache": False,
-        "fail_on": "low",
+        "finding_filter": main.rules.FindingFilter(),
     }
 
 
@@ -441,7 +441,7 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
         "use_cache": False,
         "open_output": True,
         "overwrite_cache": False,
-        "fail_on": "low",
+        "finding_filter": main.rules.FindingFilter(),
     }
 
 
@@ -898,7 +898,7 @@ def test_scan_passes_through_fail_on(monkeypatch):
     calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
-    assert calls["fail_on"] == "very high"
+    assert calls["finding_filter"].fail_on == "very high"
 
 
 def test_scan_fail_on_none_passes_none(monkeypatch):
@@ -906,7 +906,7 @@ def test_scan_fail_on_none_passes_none(monkeypatch):
     calls: dict[str, Any] = {}
     monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
     main.main()
-    assert calls["fail_on"] is None
+    assert calls["finding_filter"].fail_on is None
 
 
 def test_check_defaults_to_fail_on_low(monkeypatch):
@@ -916,7 +916,7 @@ def test_check_defaults_to_fail_on_low(monkeypatch):
         main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
     )
     main.main()
-    assert calls["fail_on"] == "low"
+    assert calls["finding_filter"].fail_on == "low"
 
 
 def test_check_passes_through_fail_on(monkeypatch):
@@ -926,7 +926,7 @@ def test_check_passes_through_fail_on(monkeypatch):
         main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
     )
     main.main()
-    assert calls["fail_on"] == "low"
+    assert calls["finding_filter"].fail_on == "low"
 
 
 @pytest.mark.parametrize(
@@ -936,7 +936,12 @@ def test_check_passes_through_fail_on(monkeypatch):
 def test_run_check_exit_code_respects_fail_on(tmp_path, fail_on, expected):
     path = tmp_path / "draft.wikitext"
     path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
-    assert main.run_check(str(path), fail_on=fail_on) == expected
+    assert (
+        main.run_check(
+            str(path), finding_filter=main.rules.FindingFilter(fail_on=fail_on)
+        )
+        == expected
+    )
 
 
 def test_run_check_fails_on_any_finding_by_default(tmp_path):
@@ -960,8 +965,57 @@ def test_run_scan_without_findings_exits_0_by_default(monkeypatch, tmp_path):
 def test_run_check_fail_on_still_prints_findings(tmp_path, capsys):
     path = tmp_path / "draft.wikitext"
     path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
-    main.run_check(str(path), fail_on="low")
+    main.run_check(str(path), finding_filter=main.rules.FindingFilter(fail_on="low"))
     assert "death_date_with_non_deceased_status" in capsys.readouterr().out
+
+
+def test_run_check_fail_on_hides_findings_below_threshold(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    main.run_check(str(path), finding_filter=main.rules.FindingFilter(fail_on="high"))
+    out = capsys.readouterr().out
+    assert "death_date_with_non_deceased_status" in out
+    assert "missing_birthplace" not in out
+    assert "Total findings: 1 (Very high: 0, High: 1, Medium: 0, Low: 0)" in out
+
+
+def test_run_check_fail_on_none_still_shows_every_finding(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    result = main.run_check(
+        str(path), finding_filter=main.rules.FindingFilter(fail_on=None)
+    )
+    out = capsys.readouterr().out
+    assert result == main.EXIT_OK
+    assert "death_date_with_non_deceased_status" in out
+    assert "missing_birthplace" in out
+
+
+def test_run_check_only_low_findings_hidden_by_fail_on_exits_0(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    result = main.run_check(
+        str(path), finding_filter=main.rules.FindingFilter(fail_on="medium")
+    )
+    assert result == main.EXIT_OK
+    assert "No findings." in capsys.readouterr().out
+
+
+def test_run_scan_fail_on_hides_findings_in_report_and_summary(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+
+    main.run_scan(
+        output=str(output), finding_filter=main.rules.FindingFilter(fail_on="high")
+    )
+
+    out = capsys.readouterr().out
+    assert "Total findings: 1 (Very high: 0, High: 1, Medium: 0, Low: 0)" in out
+    report_html = output.read_text(encoding="utf-8")
+    assert "death_date_with_non_deceased_status" in report_html
+    assert "missing_birthplace" not in report_html
 
 
 @pytest.mark.parametrize(
@@ -970,7 +1024,10 @@ def test_run_check_fail_on_still_prints_findings(tmp_path, capsys):
 )
 def test_run_scan_exit_code_respects_fail_on(monkeypatch, tmp_path, fail_on, expected):
     _stub_scan_with_high_and_low_findings(monkeypatch)
-    result = main.run_scan(output=str(tmp_path / "report.html"), fail_on=fail_on)
+    result = main.run_scan(
+        output=str(tmp_path / "report.html"),
+        finding_filter=main.rules.FindingFilter(fail_on=fail_on),
+    )
     assert result == expected
 
 
@@ -981,7 +1038,11 @@ def test_run_scan_fail_on_still_writes_and_opens_report(monkeypatch, tmp_path):
     monkeypatch.setattr(main.webbrowser, "open", opened_urls.append)
     output = tmp_path / "report.html"
 
-    result = main.run_scan(output=str(output), open_output=True, fail_on="low")
+    result = main.run_scan(
+        output=str(output),
+        open_output=True,
+        finding_filter=main.rules.FindingFilter(fail_on="low"),
+    )
 
     assert result == 1
     assert output.is_file()
@@ -999,10 +1060,270 @@ def test_run_scan_report_write_failure_still_returns_2_with_fail_on(
     monkeypatch.setattr(main.report, "generate_html_report", raise_permission_error)
 
     assert (
-        main.run_scan(output="Z:/no_access/report.html", fail_on="low")
+        main.run_scan(
+            output="Z:/no_access/report.html",
+            finding_filter=main.rules.FindingFilter(fail_on="low"),
+        )
         == main.EXIT_ERROR
     )
     assert "Could not write report" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------
+# --disable-rule (issue #10)
+# ---------------------------------------------------------------------
+
+
+def test_rule_ids_type_splits_on_commas_and_strips_whitespace():
+    assert main._rule_ids("missing_birthplace, update_outdated") == [
+        "missing_birthplace",
+        "update_outdated",
+    ]
+
+
+def test_rule_ids_type_accepts_hyphens_and_capitals():
+    assert main._rule_ids("Missing-Birthplace") == ["missing_birthplace"]
+
+
+def test_rule_ids_type_rejects_unknown_id_with_suggestion():
+    with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
+        main._rule_ids("missing_birthplac")
+    message = str(exc_info.value)
+    assert "unknown rule ID 'missing_birthplac'" in message
+    assert "did you mean 'missing_birthplace'?" in message
+
+
+def test_rule_ids_type_rejects_unknown_id_without_close_match():
+    with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
+        main._rule_ids("xyz")
+    message = str(exc_info.value)
+    assert "unknown rule ID 'xyz'" in message
+    assert "did you mean" not in message
+
+
+@pytest.mark.parametrize("value", ["", "missing_birthplace,", "a,,b"])
+def test_rule_ids_type_rejects_empty_items(value):
+    with pytest.raises(main.argparse.ArgumentTypeError) as exc_info:
+        main._rule_ids(value)
+    assert "empty rule ID" in str(exc_info.value)
+
+
+def test_disable_rule_repeated_flags_are_merged(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "main.py",
+            "--scan",
+            "--disable-rule",
+            "missing_birthplace,update_outdated",
+            "--disable-rule",
+            "height_implausible",
+            "--fail-on",
+            "high",
+        ],
+    )
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(main, "run_scan", lambda **kw: calls.update(kw) or 0)
+    main.main()
+    assert calls["finding_filter"] == main.rules.FindingFilter(
+        disabled_rules=frozenset(
+            {"missing_birthplace", "update_outdated", "height_implausible"}
+        ),
+        fail_on="high",
+    )
+
+
+def test_check_passes_disabled_rules_to_run_check(monkeypatch):
+    monkeypatch.setattr(
+        sys, "argv", ["main.py", "--check", "X", "--disable-rule", "update_outdated"]
+    )
+    calls: dict[str, Any] = {}
+    monkeypatch.setattr(
+        main, "run_check", lambda target, **kw: calls.update(target=target, **kw) or 0
+    )
+    main.main()
+    assert calls["finding_filter"].disabled_rules == {"update_outdated"}
+
+
+def test_disable_rule_rejects_unknown_id_before_running(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--disable-rule", "bogus"])
+    calls: list[dict] = []
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
+    with pytest.raises(SystemExit) as exc_info:
+        main.main()
+    assert exc_info.value.code == 2
+    assert calls == []
+
+
+def test_run_check_disabled_rule_is_not_printed_and_does_not_fail(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"missing_birthplace"})
+    )
+    result = main.run_check(str(path), finding_filter=finding_filter)
+    out = capsys.readouterr().out
+    assert result == main.EXIT_OK
+    assert "] missing_birthplace:" not in out
+    assert "No findings." in out
+
+
+def test_run_check_disabled_rule_combined_with_fail_on(tmp_path, capsys):
+    # The high finding is disabled and the low one is below --fail-on,
+    # so nothing is left.
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"death_date_with_non_deceased_status"}),
+        fail_on="medium",
+    )
+    assert main.run_check(str(path), finding_filter=finding_filter) == main.EXIT_OK
+    assert "No findings." in capsys.readouterr().out
+
+
+def test_run_scan_disabled_rule_is_left_out_of_report(monkeypatch, capsys, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"death_date_with_non_deceased_status"})
+    )
+
+    result = main.run_scan(output=str(output), finding_filter=finding_filter)
+
+    assert result == main.EXIT_FINDINGS  # the low finding is still there
+    assert "Total findings: 1 (Very high: 0, High: 0, Medium: 0, Low: 1)" in (
+        capsys.readouterr().out
+    )
+    # Rule ids appear in finding rows as "(rule_id)"; the disabled id
+    # itself is still named in the report's filter note.
+    report_html = output.read_text(encoding="utf-8")
+    assert "(missing_birthplace)" in report_html
+    assert "(death_date_with_non_deceased_status)" not in report_html
+
+
+_NATION_AND_DISCIPLINE_WIKITEXT = (
+    "{{Infobox Leichtathlet|status=a|geburtsort=Berlin"
+    "|nation={{XYZ}}|disziplin=Blitzlauf}}"
+)
+
+
+def _record_template_lookups(monkeypatch) -> list[list[str]]:
+    lookups: list[list[str]] = []
+
+    def _templates_exist(session, titles):
+        lookups.append(list(titles))
+        return dict.fromkeys(titles, False)
+
+    monkeypatch.setattr(main.fetch, "templates_exist", _templates_exist)
+    return lookups
+
+
+@pytest.mark.parametrize(
+    ("disabled", "expected_lookups"),
+    [
+        (set(), [["Vorlage:XYZ"], ["Blitzlauf"]]),
+        ({"nation_code_unknown"}, [["Blitzlauf"]]),
+        ({"discipline_link_unknown"}, [["Vorlage:XYZ"]]),
+        ({"nation_code_unknown", "discipline_link_unknown"}, []),
+    ],
+)
+def test_run_check_skips_lookups_for_disabled_rules(
+    monkeypatch, tmp_path, disabled, expected_lookups
+):
+    lookups = _record_template_lookups(monkeypatch)
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_NATION_AND_DISCIPLINE_WIKITEXT, encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(disabled_rules=frozenset(disabled))
+
+    main.run_check(str(path), finding_filter=finding_filter)
+
+    assert lookups == expected_lookups
+
+
+def test_run_scan_skips_lookups_for_disabled_rules(monkeypatch, capsys, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_all_with_cache",
+        lambda session, titles, use_cache=True, overwrite_cache=False: {
+            "Athlete": {"wikitext": _NATION_AND_DISCIPLINE_WIKITEXT, "categories": []}
+        },
+    )
+    lookups = _record_template_lookups(monkeypatch)
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"nation_code_unknown"})
+    )
+
+    main.run_scan(output=str(tmp_path / "report.html"), finding_filter=finding_filter)
+
+    assert lookups == [["Blitzlauf"]]
+    out = capsys.readouterr().out
+    assert "distinct nation codes" not in out
+    assert "distinct bare discipline links" in out
+
+
+# ---------------------------------------------------------------------
+# Filter note (console + report)
+# ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("fail_on", [None, "low"])
+def test_describe_filter_none_when_nothing_hidden(fail_on):
+    assert main._describe_filter(main.rules.FindingFilter(fail_on=fail_on)) is None
+
+
+def test_describe_filter_mentions_fail_on_and_sorted_disabled_rules():
+    note = main._describe_filter(
+        main.rules.FindingFilter(
+            disabled_rules=frozenset({"update_outdated", "missing_birthplace"}),
+            fail_on="high",
+        )
+    )
+    assert note == (
+        "Filter active: showing only findings at or above 'high' severity "
+        "(--fail-on); hiding findings of rule(s) missing_birthplace, "
+        "update_outdated (--disable-rule)."
+    )
+
+
+def test_run_check_prints_filter_note(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    main.run_check(str(path), finding_filter=main.rules.FindingFilter(fail_on="high"))
+    assert "Filter active: showing only findings at or above 'high'" in (
+        capsys.readouterr().out
+    )
+
+
+def test_run_check_no_filter_note_by_default(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    main.run_check(str(path))
+    assert "Filter active" not in capsys.readouterr().out
+
+
+def test_run_scan_prints_filter_note_and_passes_it_to_report(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"update_outdated"})
+    )
+
+    main.run_scan(output=str(output), finding_filter=finding_filter)
+
+    expected = "Filter active: hiding findings of rule(s) update_outdated"
+    assert expected in capsys.readouterr().out
+    assert expected in output.read_text(encoding="utf-8")
+
+
+def test_run_scan_report_has_no_filter_note_by_default(monkeypatch, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+    main.run_scan(output=str(output))
+    assert '<div class="filter-note">' not in output.read_text(encoding="utf-8")
 
 
 # Integration: the real CLI in a subprocess, so the exit code that
@@ -1038,6 +1359,14 @@ def test_cli_check_exit_code_with_fail_on(tmp_path, extra_args, expected):
     assert result.returncode == expected, result.stderr
 
 
+def test_cli_check_fail_on_hides_lower_findings_from_output(tmp_path):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    result = _run_cli("--check", str(path), "--fail-on", "high")
+    assert "death_date_with_non_deceased_status" in result.stdout
+    assert "missing_birthplace" not in result.stdout
+
+
 def test_cli_check_clean_draft_exits_0_with_fail_on_low(tmp_path):
     path = tmp_path / "draft.wikitext"
     path.write_text(
@@ -1060,3 +1389,16 @@ def test_cli_rejects_unknown_fail_on_severity_with_exit_2(tmp_path):
     result = _run_cli("--check", "whatever", "--fail-on", "critical")
     assert result.returncode == 2
     assert "unknown severity 'critical'" in result.stderr
+
+
+def test_cli_rejects_unknown_rule_id_with_exit_2():
+    result = _run_cli("--check", "whatever", "--disable-rule", "missing-birthplac")
+    assert result.returncode == 2
+    assert "did you mean 'missing_birthplace'?" in result.stderr
+
+
+def test_cli_check_disabling_the_only_firing_rule_exits_0(tmp_path):
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    result = _run_cli("--check", str(path), "--disable-rule", "missing_birthplace")
+    assert result.returncode == 0, result.stdout + result.stderr

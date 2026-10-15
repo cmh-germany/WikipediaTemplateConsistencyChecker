@@ -52,6 +52,7 @@
       <a href="#usage">Usage</a>
       <ul>
         <li><a href="#exit-codes-ci-usage">Exit Codes (CI Usage)</a></li>
+        <li><a href="#hiding-rules-or-low-severity-findings">Hiding Rules or Low-Severity Findings</a></li>
         <li><a href="#running-several-scans-at-once">Running Several Scans at Once</a></li>
         <li><a href="#severity-levels">Severity Levels</a></li>
       </ul>
@@ -316,23 +317,25 @@ Like many linters, the tool reports through its exit code whether it
 found anything, so it can be used as an automated gate — e.g. in a CI
 pipeline or a pre-publish check — without parsing its output. By
 default, a run ends with exit code `1` if there is **any** finding.
-`--fail-on SEVERITY` (in either mode) raises that bar: the run then only
-ends with `1` if at least one finding has that
-[severity](#severity-levels) or higher. `SEVERITY` is one of `low` (the
-default — any finding), `medium`, `high`, `very-high`, or `none`, which
-switches this off so a completed run always ends with `0`:
+`--fail-on SEVERITY` (in either mode) raises that bar: findings below
+that [severity](#severity-levels) are hidden — from the console output,
+the summary counts, and the HTML report — and the run only ends with `1`
+if at least one finding is left. `SEVERITY` is one of `low` (the
+default — show and fail on any finding), `medium`, `high`, `very-high`,
+or `none`, which shows every finding but never fails, so a completed run
+always ends with `0`:
 
 ```sh
-python main.py --check my_draft.wikitext --fail-on high   # fail on high or very high findings
-python main.py --scan --fail-on very-high                 # fail only on logical contradictions
-python main.py --scan --fail-on none                      # never fail because of findings
+python main.py --check my_draft.wikitext --fail-on high   # show and fail on high or very high findings
+python main.py --scan --fail-on very-high                 # only logical contradictions
+python main.py --scan --fail-on none                      # show everything, never fail because of findings
 ```
 
 | Exit code | Meaning |
 |---|---|
-| `0` | Run completed; no finding reached the `--fail-on` severity (by default: no findings at all) |
-| `1` | Run completed, and at least one finding reached the `--fail-on` severity |
-| `2` | The run failed (article/infobox not found, draft file unreadable, report couldn't be written) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity) |
+| `0` | Run completed; no finding is left after `--fail-on` and `--disable-rule` (by default: no findings at all) |
+| `1` | Run completed, and at least one finding reached the `--fail-on` severity (findings of [disabled rules](#hiding-rules-or-low-severity-findings) never count) |
+| `2` | The run failed (article/infobox not found, draft file unreadable, report couldn't be written) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity or `--disable-rule` rule ID) |
 
 If you're not using the tool in an automated setup, you can ignore the
 exit code entirely — a `1` does **not** mean the tool crashed. The
@@ -347,6 +350,37 @@ so the reason is visible in a CI log. Example GitHub Actions step:
 - name: Check infobox draft
   run: python main.py --check drafts/athlete.wikitext --fail-on high
 ```
+
+### Hiding Rules or Low-Severity Findings
+
+Two flags (usable in either mode, and together) narrow down what a run
+shows and fails on, without editing any code:
+
+* `--fail-on SEVERITY` hides every finding below that severity (see
+  [Exit Codes](#exit-codes-ci-usage) above) — e.g. a CI job that should
+  only ever report and fail on high or very high findings.
+* `--disable-rule RULE_ID[,RULE_ID...]` hides every finding of the given
+  rule(s), e.g. a rule that's too noisy for what you're working on right
+  now. Separate several rule IDs with commas, or repeat the flag; `-` and
+  `_` are interchangeable (`missing-birthplace` works too). The rule ID
+  is shown next to each finding in `--check` output (e.g.
+  `[LOW      ] missing_birthplace: ...`) and in the report's Rule column;
+  all of them are listed under [Severity Levels](#severity-levels). An
+  unknown or mistyped rule ID stops the run before it starts, with a
+  suggestion if it looks like a typo.
+
+```sh
+python main.py --scan --fail-on high                                        # CI: only high and very high
+python main.py --check my_draft.wikitext --disable-rule missing_birthplace  # ignore one rule for now
+python main.py --scan --fail-on medium --disable-rule update_outdated,nation_nonstandard_format
+```
+
+Whenever something is hidden, the console prints a `Filter active: ...`
+line naming the active `--fail-on`/`--disable-rule` settings, and the
+HTML report repeats it in its header, so a filtered report isn't
+mistaken for a cleaner corpus. Disabling `nation_code_unknown` or
+`discipline_link_unknown` also skips the Wikipedia lookups those rules
+need, which makes a run slightly faster.
 
 ### Running Several Scans at Once
 
@@ -388,8 +422,36 @@ enough.
 | **low** | missing information or outdated data, more of a hint than an error |
 
 Each rule has a stable, code-friendly `rule_id` (used in `--check` console
-output and in `rules.RULE_TITLES`) plus a natural-language title shown in the
-HTML report, along with the infobox parameter(s) it flagged.
+output, `--disable-rule`, and `rules.RULE_TITLES`) plus a natural-language
+title shown in the HTML report, along with the infobox parameter(s) it
+flagged:
+
+| Rule ID | Severity | Title |
+|---|---|---|
+| `status_deceased_without_death_date` | very high | Deceased status without a death date |
+| `invalid_status_code` | very high | Invalid status code |
+| `death_date_before_birth_date` | very high | Death date before birth date |
+| `birth_date_in_future` | very high | Birth date in the future |
+| `death_date_in_future` | very high | Death date in the future |
+| `career_end_before_birth_date` | very high | Career end before birth date |
+| `national_squad_before_birth` | very high | National squad year before birth |
+| `death_date_with_non_deceased_status` | high | Death date given despite non-deceased status |
+| `deceased_but_living_person_category` | high | Deceased but still in the living-people category |
+| `career_end_despite_active` | high | Career end given despite active status |
+| `implausible_age_at_death` | high | Implausible age at death |
+| `medal_count_mismatch` | high | Medal count mismatch |
+| `medal_before_birth` | high | Medal year before birth |
+| `national_squad_implausibly_young` | medium | Implausibly young national squad start |
+| `height_comma_format` / `weight_comma_format` | medium | Height/weight uses a comma instead of a plain number |
+| `height_implausible` / `weight_implausible` | medium | Implausible height/weight |
+| `nation_code_unknown` | medium | Unknown nation code |
+| `medal_implausibly_young` | medium | Implausibly young age at first medal |
+| `status_code_spelled_out` | low | Status code spelled out instead of abbreviated |
+| `height_not_numeric` / `weight_not_numeric` | low | Height/weight is not a plain number |
+| `nation_nonstandard_format` | low | Nation field in a non-standard format |
+| `discipline_link_unknown` | low | Unknown discipline link |
+| `missing_birthplace` | low | Missing birthplace |
+| `update_outdated` | low | Outdated update despite active status |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -412,8 +474,11 @@ hand-crafted edge cases, but does not make any network calls itself
 every infobox field is exercised by at least one test rather than
 every individual rule, and so every CLI flag (`--scan`, `--check`,
 `--limit`, `--output`, `--no-cache`, `--overwrite-cache`, `--open`,
-`--fail-on`) is exercised at least once -- rather than an exhaustive
-suite. The `--fail-on` exit codes are additionally checked end-to-end by
+`--fail-on`, `--disable-rule`) is exercised at least once -- rather than
+an exhaustive suite. A test also guards that every rule ID the rules can
+emit is listed in `rules.RULE_TITLES`, since `--disable-rule` only
+accepts IDs from there. The `--fail-on` and `--disable-rule` exit codes
+are additionally checked end-to-end by
 running the CLI in a subprocess against a local draft file, which needs
 no network access either, and the shared request pacing is checked by
 running several worker processes against one coordination file (using a
