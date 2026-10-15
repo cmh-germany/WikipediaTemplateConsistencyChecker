@@ -640,21 +640,6 @@ alongside #23:
 
 
 
-<!-- ROADMAP -->
-## Roadmap
-
-* A config file for default flags (e.g. a project's usual `--fail-on`
-  and `--disable-rule` settings), with command-line flags overriding it
-  — deferred from
-  [issue #10](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/10).
-
-See the [open issues](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues)
-for the full list of proposed features and known issues.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
 <!-- CONTRIBUTING -->
 ## Contributing
 
