@@ -251,14 +251,20 @@ def run_check(
         print(f"No Infobox Leichtathlet embedding found in '{target}'.")
         return EXIT_ERROR
 
-    nation_codes = rules.nation_codes_to_check(params.get("nation", ""))
+    # The existence lookups are the only costly part of a rule, so skip
+    # them when the only rule needing them is disabled anyway.
+    nation_codes = []
+    if not finding_filter.is_disabled("nation_code_unknown"):
+        nation_codes = rules.nation_codes_to_check(params.get("nation", ""))
     nation_exists = None
     if nation_codes:
         nation_exists = fetch.templates_exist(
             session, [f"Vorlage:{code}" for code in nation_codes]
         )
 
-    discipline = rules.discipline_candidate(params.get("disziplin", ""))
+    discipline = None
+    if not finding_filter.is_disabled("discipline_link_unknown"):
+        discipline = rules.discipline_candidate(params.get("disziplin", ""))
     discipline_exists = None
     if discipline:
         discipline_exists = fetch.templates_exist(session, [discipline])
@@ -357,13 +363,19 @@ def run_scan(
         if discipline:
             all_disciplines.add(discipline)
 
-    print(f"Checking {len(all_nation_codes)} distinct nation codes ...")
-    nation_exists = fetch.templates_exist(
-        session, [f"Vorlage:{code}" for code in all_nation_codes]
-    )
+    # Skip the existence lookups (the only costly part of a rule) when
+    # the only rule needing them is disabled anyway.
+    nation_exists = None
+    if not finding_filter.is_disabled("nation_code_unknown"):
+        print(f"Checking {len(all_nation_codes)} distinct nation codes ...")
+        nation_exists = fetch.templates_exist(
+            session, [f"Vorlage:{code}" for code in all_nation_codes]
+        )
 
-    print(f"Checking {len(all_disciplines)} distinct bare discipline links ...")
-    discipline_exists = fetch.templates_exist(session, list(all_disciplines))
+    discipline_exists = None
+    if not finding_filter.is_disabled("discipline_link_unknown"):
+        print(f"Checking {len(all_disciplines)} distinct bare discipline links ...")
+        discipline_exists = fetch.templates_exist(session, list(all_disciplines))
 
     print("Running rule checks ...")
     results = {}
