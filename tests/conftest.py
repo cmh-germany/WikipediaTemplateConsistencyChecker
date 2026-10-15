@@ -11,8 +11,19 @@ import os
 import pytest
 
 import parse
+import throttle
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+@pytest.fixture(autouse=True)
+def isolated_throttle_lock_file(tmp_path, monkeypatch):
+    """Points throttle.LOCK_FILE at a throwaway path for every test, so
+    the suite never reads or writes the real, machine-wide pacing state
+    shared with actual runs of the tool."""
+    path = tmp_path / "api.lock"
+    monkeypatch.setattr(throttle, "LOCK_FILE", path)
+    return path
 
 
 def load_fixture(name):
