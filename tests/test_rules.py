@@ -566,7 +566,7 @@ def _emitted_rule_ids() -> set[str]:
     rules.py, expanding the f"{label}_..." ids of
     check_height_weight_plausibility for both of its labels."""
     tree = ast.parse(Path(rules.__file__).read_text(encoding="utf-8"))
-    ids = set()
+    ids: set[str] = set()
     for node in ast.walk(tree):
         if not (
             isinstance(node, ast.Call)
@@ -576,11 +576,11 @@ def _emitted_rule_ids() -> set[str]:
             continue
         first = node.args[0]
         if isinstance(first, ast.Constant):
-            ids.add(first.value)
+            ids.add(str(first.value))
         else:
             assert isinstance(first, ast.JoinedStr)
             template = "".join(
-                part.value if isinstance(part, ast.Constant) else "{label}"
+                str(part.value) if isinstance(part, ast.Constant) else "{label}"
                 for part in first.values
             )
             ids.update(template.format(label=label) for label in ("height", "weight"))
