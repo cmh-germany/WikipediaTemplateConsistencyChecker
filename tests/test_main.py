@@ -1200,6 +1200,67 @@ def test_run_scan_disabled_rule_is_left_out_of_report(monkeypatch, capsys, tmp_p
     assert "death_date_with_non_deceased_status" not in report_html
 
 
+_NATION_AND_DISCIPLINE_WIKITEXT = (
+    "{{Infobox Leichtathlet|status=a|geburtsort=Berlin"
+    "|nation={{XYZ}}|disziplin=Blitzlauf}}"
+)
+
+
+def _record_template_lookups(monkeypatch) -> list[list[str]]:
+    lookups: list[list[str]] = []
+
+    def _templates_exist(session, titles):
+        lookups.append(list(titles))
+        return dict.fromkeys(titles, False)
+
+    monkeypatch.setattr(main.fetch, "templates_exist", _templates_exist)
+    return lookups
+
+
+@pytest.mark.parametrize(
+    ("disabled", "expected_lookups"),
+    [
+        (set(), [["Vorlage:XYZ"], ["Blitzlauf"]]),
+        ({"nation_code_unknown"}, [["Blitzlauf"]]),
+        ({"discipline_link_unknown"}, [["Vorlage:XYZ"]]),
+        ({"nation_code_unknown", "discipline_link_unknown"}, []),
+    ],
+)
+def test_run_check_skips_lookups_for_disabled_rules(
+    monkeypatch, tmp_path, disabled, expected_lookups
+):
+    lookups = _record_template_lookups(monkeypatch)
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_NATION_AND_DISCIPLINE_WIKITEXT, encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(disabled_rules=frozenset(disabled))
+
+    main.run_check(str(path), finding_filter=finding_filter)
+
+    assert lookups == expected_lookups
+
+
+def test_run_scan_skips_lookups_for_disabled_rules(monkeypatch, capsys, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_all_with_cache",
+        lambda session, titles, use_cache=True, overwrite_cache=False: {
+            "Athlete": {"wikitext": _NATION_AND_DISCIPLINE_WIKITEXT, "categories": []}
+        },
+    )
+    lookups = _record_template_lookups(monkeypatch)
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"nation_code_unknown"})
+    )
+
+    main.run_scan(output=str(tmp_path / "report.html"), finding_filter=finding_filter)
+
+    assert lookups == [["Blitzlauf"]]
+    out = capsys.readouterr().out
+    assert "distinct nation codes" not in out
+    assert "distinct bare discipline links" in out
+
+
 # Integration: the real CLI in a subprocess, so the exit code that
 # actually reaches the shell (via sys.exit(main())) is what's asserted.
 # --check on a local file with no nation/disziplin makes no network calls.
