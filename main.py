@@ -10,6 +10,8 @@ Two modes:
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
 
+Both modes accept --fail-on SEVERITY and --disable-rule RULE_ID[,...].
+
 --fail-on SEVERITY (default: low, i.e. everything) hides findings
 below SEVERITY from the console and the report ("none" hides nothing
 and never fails). Exit codes: 0 = no finding at or above --fail-on
@@ -18,6 +20,7 @@ arguments were invalid.
 """
 
 import argparse
+import difflib
 import os
 import re
 import sys
@@ -83,6 +86,32 @@ def _severity(value: str) -> str | None:
             f"unknown severity '{value}' -- choose one of: {valid}, none"
         )
     return severity
+
+
+def _rule_ids(value: str) -> list[str]:
+    """argparse type for --disable-rule. Accepts a comma-separated list
+    so several rules fit in one flag, and -- like _severity -- accepts
+    "-" in place of "_" so ids can be typed either way. Unknown ids are
+    rejected up front (with a "did you mean" hint for typos) rather
+    than silently ignored: a mistyped id would otherwise leave the rule
+    running, which looks exactly like the flag being broken."""
+    ids = [item.strip().lower().replace("-", "_") for item in value.split(",")]
+    if not all(ids):
+        raise argparse.ArgumentTypeError(
+            f"empty rule ID in '{value}' -- separate rule IDs with single "
+            "commas, e.g. missing_birthplace,update_outdated"
+        )
+    for rule_id in ids:
+        if rule_id in rules.RULE_TITLES:
+            continue
+        message = f"unknown rule ID '{rule_id}'"
+        if close := difflib.get_close_matches(rule_id, rules.RULE_TITLES, n=1):
+            message += f" -- did you mean '{close[0]}'?"
+        raise argparse.ArgumentTypeError(
+            f"{message} (see the list of rule IDs in the README, or the "
+            "rule ID shown next to each finding in --check output)"
+        )
+    return ids
 
 
 def _check_output_path(path):
@@ -438,8 +467,26 @@ def main():
         "the run completes. Errors (e.g. article not found) always exit "
         "with code 2",
     )
+    parser.add_argument(
+        "--disable-rule",
+        type=_rule_ids,
+        action="append",
+        default=[],
+        metavar="RULE_ID[,RULE_ID...]",
+        help="Don't report findings of these rules (comma-separated, and "
+        "the flag can be repeated), e.g. --disable-rule "
+        "missing_birthplace,update_outdated. The rule ID is shown next to "
+        "each finding in --check output and in the report's Rule column; "
+        "the README lists all of them. Disabled findings never cause "
+        "exit code 1",
+    )
     args = parser.parse_args()
-    finding_filter = rules.FindingFilter(fail_on=args.fail_on)
+    finding_filter = rules.FindingFilter(
+        disabled_rules=frozenset(
+            rule_id for ids in args.disable_rule for rule_id in ids
+        ),
+        fail_on=args.fail_on,
+    )
 
     # args.check is "" (falsy, but not None) when the user passes
     # --check with an empty/whitespace-only value -- reject it
