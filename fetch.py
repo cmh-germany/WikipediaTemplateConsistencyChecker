@@ -37,6 +37,14 @@ BATCH_SIZE = 50
 
 MAX_RETRIES = 5
 
+# Sent as the "maxlag" parameter with every request: when Wikipedia's
+# database replicas lag more than this many seconds behind (i.e. the
+# servers are under load), the API refuses the request with a "maxlag"
+# error instead of serving it, and we back off. 5 is the value
+# MediaWiki recommends for non-interactive tools:
+# https://www.mediawiki.org/wiki/Manual:Maxlag_parameter
+MAXLAG_SECONDS = 5
+
 
 def get_session():
     session = requests.Session()
@@ -44,27 +52,41 @@ def get_session():
     return session
 
 
-def _get_with_retry(session, params):
-    """GET with backoff on 429 (Too Many Requests) / 5xx errors. Every
-    request -- including retries -- waits for its turn in the
-    machine-wide pacing shared with other runs of this tool, and a
-    backoff delays those other runs as well (see throttle.py)."""
+def _is_maxlag_error(data: dict[str, Any]) -> bool:
+    error = data.get("error")
+    return isinstance(error, dict) and error.get("code") == "maxlag"
+
+
+def _get_with_retry(session, params) -> dict[str, Any]:
+    """GET and parse the JSON response, with backoff on 429 (Too Many
+    Requests), 5xx errors, and MediaWiki "maxlag" errors -- the latter
+    arrive as HTTP 200 with an error body, so the response has to be
+    parsed before deciding whether to retry. Every request -- including
+    retries -- waits for its turn in the machine-wide pacing shared
+    with other runs of this tool, and a backoff delays those other runs
+    as well (see throttle.py)."""
     delay = 2.0
     for attempt in range(MAX_RETRIES):
         throttle.wait_for_turn()
         response = session.get(API_URL, params=params, timeout=30)
+        last_attempt = attempt == MAX_RETRIES - 1
         if response.status_code == 429 or response.status_code >= 500:
-            retry_after = response.headers.get("Retry-After")
-            wait = float(retry_after) if retry_after else delay
-            if attempt == MAX_RETRIES - 1:
+            if last_attempt:
                 response.raise_for_status()
-            throttle.back_off(wait)
-            delay *= 2
-            continue
-        response.raise_for_status()
-        return response
-    response.raise_for_status()
-    return response
+        else:
+            response.raise_for_status()
+            data = response.json()
+            if not _is_maxlag_error(data):
+                return data
+            if last_attempt:
+                raise RuntimeError(
+                    "Wikipedia's servers are currently overloaded (maxlag) "
+                    "-- please try again in a few minutes."
+                )
+        retry_after = response.headers.get("Retry-After")
+        throttle.back_off(float(retry_after) if retry_after else delay)
+        delay *= 2
+    raise AssertionError("unreachable: the last attempt always returns or raises")
 
 
 def _api_query(session, params, stop_when=None):
@@ -76,11 +98,11 @@ def _api_query(session, params, stop_when=None):
     params = dict(params)
     params["format"] = "json"
     params["formatversion"] = "2"
+    params["maxlag"] = MAXLAG_SECONDS
 
     merged: dict[str, Any] = {}
     while True:
-        response = _get_with_retry(session, params)
-        data = response.json()
+        data = _get_with_retry(session, params)
 
         if "error" in data:
             raise RuntimeError(f"MediaWiki API error: {data['error']}")
