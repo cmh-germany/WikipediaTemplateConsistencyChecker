@@ -1165,7 +1165,7 @@ def test_run_check_disabled_rule_is_not_printed_and_does_not_fail(tmp_path, caps
     result = main.run_check(str(path), finding_filter=finding_filter)
     out = capsys.readouterr().out
     assert result == main.EXIT_OK
-    assert "missing_birthplace" not in out
+    assert "] missing_birthplace:" not in out
     assert "No findings." in out
 
 
@@ -1195,9 +1195,11 @@ def test_run_scan_disabled_rule_is_left_out_of_report(monkeypatch, capsys, tmp_p
     assert "Total findings: 1 (Very high: 0, High: 0, Medium: 0, Low: 1)" in (
         capsys.readouterr().out
     )
+    # Rule ids appear in finding rows as "(rule_id)"; the disabled id
+    # itself is still named in the report's filter note.
     report_html = output.read_text(encoding="utf-8")
-    assert "missing_birthplace" in report_html
-    assert "death_date_with_non_deceased_status" not in report_html
+    assert "(missing_birthplace)" in report_html
+    assert "(death_date_with_non_deceased_status)" not in report_html
 
 
 _NATION_AND_DISCIPLINE_WIKITEXT = (
@@ -1259,6 +1261,69 @@ def test_run_scan_skips_lookups_for_disabled_rules(monkeypatch, capsys, tmp_path
     out = capsys.readouterr().out
     assert "distinct nation codes" not in out
     assert "distinct bare discipline links" in out
+
+
+# ---------------------------------------------------------------------
+# Filter note (console + report)
+# ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("fail_on", [None, "low"])
+def test_describe_filter_none_when_nothing_hidden(fail_on):
+    assert main._describe_filter(main.rules.FindingFilter(fail_on=fail_on)) is None
+
+
+def test_describe_filter_mentions_fail_on_and_sorted_disabled_rules():
+    note = main._describe_filter(
+        main.rules.FindingFilter(
+            disabled_rules=frozenset({"update_outdated", "missing_birthplace"}),
+            fail_on="high",
+        )
+    )
+    assert note == (
+        "Filter active: showing only findings at or above 'high' severity "
+        "(--fail-on); hiding findings of rule(s) missing_birthplace, "
+        "update_outdated (--disable-rule)."
+    )
+
+
+def test_run_check_prints_filter_note(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    main.run_check(str(path), finding_filter=main.rules.FindingFilter(fail_on="high"))
+    assert "Filter active: showing only findings at or above 'high'" in (
+        capsys.readouterr().out
+    )
+
+
+def test_run_check_no_filter_note_by_default(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    main.run_check(str(path))
+    assert "Filter active" not in capsys.readouterr().out
+
+
+def test_run_scan_prints_filter_note_and_passes_it_to_report(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"update_outdated"})
+    )
+
+    main.run_scan(output=str(output), finding_filter=finding_filter)
+
+    expected = "Filter active: hiding findings of rule(s) update_outdated"
+    assert expected in capsys.readouterr().out
+    assert expected in output.read_text(encoding="utf-8")
+
+
+def test_run_scan_report_has_no_filter_note_by_default(monkeypatch, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+    main.run_scan(output=str(output))
+    assert '<div class="filter-note">' not in output.read_text(encoding="utf-8")
 
 
 # Integration: the real CLI in a subprocess, so the exit code that
