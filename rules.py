@@ -119,6 +119,35 @@ def count_by_severity(findings: list[Finding]) -> dict[str, int]:
     return counts
 
 
+@dataclass(frozen=True)
+class FindingFilter:
+    """Decides which findings a run shows and counts (--fail-on,
+    --disable-rule).
+
+    Filters by each finding's emitted `rule_id` rather than by check_*
+    function, since one function can emit several ids (e.g.
+    check_height_weight_plausibility emits six) and the ids are what
+    users see in --check output and the report. `fail_on=None` (the
+    CLI's "none") means no severity filtering at all.
+    """
+
+    disabled_rules: frozenset[str] = frozenset()
+    fail_on: str | None = LOW
+
+    def is_disabled(self, rule_id: str) -> bool:
+        return rule_id in self.disabled_rules
+
+    def keeps(self, finding: Finding) -> bool:
+        if self.is_disabled(finding.rule_id):
+            return False
+        if self.fail_on is None:
+            return True
+        return SEVERITY_ORDER[finding.severity] <= SEVERITY_ORDER[self.fail_on]
+
+    def apply(self, findings: list[Finding]) -> list[Finding]:
+        return [finding for finding in findings if self.keeps(finding)]
+
+
 @dataclass
 class Context:
     """Bundles all the inputs a rule might need."""
