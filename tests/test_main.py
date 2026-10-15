@@ -969,6 +969,55 @@ def test_run_check_fail_on_still_prints_findings(tmp_path, capsys):
     assert "death_date_with_non_deceased_status" in capsys.readouterr().out
 
 
+def test_run_check_fail_on_hides_findings_below_threshold(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    main.run_check(str(path), finding_filter=main.rules.FindingFilter(fail_on="high"))
+    out = capsys.readouterr().out
+    assert "death_date_with_non_deceased_status" in out
+    assert "missing_birthplace" not in out
+    assert "Total findings: 1 (Very high: 0, High: 1, Medium: 0, Low: 0)" in out
+
+
+def test_run_check_fail_on_none_still_shows_every_finding(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    result = main.run_check(
+        str(path), finding_filter=main.rules.FindingFilter(fail_on=None)
+    )
+    out = capsys.readouterr().out
+    assert result == main.EXIT_OK
+    assert "death_date_with_non_deceased_status" in out
+    assert "missing_birthplace" in out
+
+
+def test_run_check_only_low_findings_hidden_by_fail_on_exits_0(tmp_path, capsys):
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    result = main.run_check(
+        str(path), finding_filter=main.rules.FindingFilter(fail_on="medium")
+    )
+    assert result == main.EXIT_OK
+    assert "No findings." in capsys.readouterr().out
+
+
+def test_run_scan_fail_on_hides_findings_in_report_and_summary(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    output = tmp_path / "report.html"
+
+    main.run_scan(
+        output=str(output), finding_filter=main.rules.FindingFilter(fail_on="high")
+    )
+
+    out = capsys.readouterr().out
+    assert "Total findings: 1 (Very high: 0, High: 1, Medium: 0, Low: 0)" in out
+    report_html = output.read_text(encoding="utf-8")
+    assert "death_date_with_non_deceased_status" in report_html
+    assert "missing_birthplace" not in report_html
+
+
 @pytest.mark.parametrize(
     ("fail_on", "expected"),
     [(None, 0), ("medium", 1), ("very high", 0)],
@@ -1051,6 +1100,14 @@ def test_cli_check_exit_code_with_fail_on(tmp_path, extra_args, expected):
     path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
     result = _run_cli("--check", str(path), *extra_args)
     assert result.returncode == expected, result.stderr
+
+
+def test_cli_check_fail_on_hides_lower_findings_from_output(tmp_path):
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    result = _run_cli("--check", str(path), "--fail-on", "high")
+    assert "death_date_with_non_deceased_status" in result.stdout
+    assert "missing_birthplace" not in result.stdout
 
 
 def test_cli_check_clean_draft_exits_0_with_fail_on_low(tmp_path):
