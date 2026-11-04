@@ -134,6 +134,11 @@ class FindingFilter:
 
     disabled_rules: frozenset[str] = frozenset()
     fail_on: str | None = LOW
+    # --include-suppressed: show suppressed findings (marked as such)
+    # instead of hiding them; they still never count towards the exit
+    # code. Applied by the caller, since matching a suppression needs
+    # the article and its infobox values (see suppress.py).
+    include_suppressed: bool = False
 
     def is_disabled(self, rule_id: str) -> bool:
         return rule_id in self.disabled_rules

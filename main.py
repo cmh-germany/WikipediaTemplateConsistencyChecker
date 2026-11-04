@@ -10,13 +10,16 @@ Two modes:
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
 
-Both modes accept --fail-on SEVERITY and --disable-rule RULE_ID[,...].
+Both modes accept --fail-on SEVERITY, --disable-rule RULE_ID[,...] and
+--include-suppressed.
 
 --fail-on SEVERITY (default: low, i.e. everything) hides findings
 below SEVERITY from the console and the report ("none" hides nothing
-and never fails). Exit codes: 0 = no finding at or above --fail-on
-SEVERITY, 1 = such findings present, 2 = the run failed or the
-arguments were invalid.
+and never fails). Findings suppressed in suppressions.json (see
+suppress.py) are hidden unless --include-suppressed is given, and never
+count. Exit codes: 0 = no finding at or above --fail-on SEVERITY,
+1 = such findings present, 2 = the run failed or the arguments were
+invalid.
 """
 
 import argparse
@@ -30,6 +33,7 @@ import fetch
 import parse
 import report
 import rules
+import suppress
 
 __version__ = "0.3"
 
@@ -152,11 +156,15 @@ def _format_severity_summary(counts: dict[str, int]) -> str:
     return f"Total findings: {total} ({breakdown})"
 
 
-def _describe_filter(finding_filter: rules.FindingFilter) -> str | None:
+def _describe_filter(
+    finding_filter: rules.FindingFilter,
+    suppressed_rules: frozenset[str] = frozenset(),
+) -> str | None:
     """One-line description of an active --fail-on/--disable-rule
-    filter for the console and the report, so a filtered (shorter)
-    result isn't mistaken for a cleaner one. None if nothing is hidden
-    (--fail-on low or none, no disabled rules)."""
+    filter and of rules suppressed as a whole in suppressions.json, for
+    the console and the report, so a filtered (shorter) result isn't
+    mistaken for a cleaner one. None if nothing is hidden (--fail-on low
+    or none, no disabled or suppressed rules)."""
     parts = []
     if finding_filter.fail_on not in (None, rules.LOW):
         parts.append(
@@ -166,9 +174,45 @@ def _describe_filter(finding_filter: rules.FindingFilter) -> str | None:
     if finding_filter.disabled_rules:
         disabled = ", ".join(sorted(finding_filter.disabled_rules))
         parts.append(f"hiding findings of rule(s) {disabled} (--disable-rule)")
+    if suppressed_rules and not finding_filter.include_suppressed:
+        suppressed = ", ".join(sorted(suppressed_rules))
+        parts.append(
+            f"not running rule(s) {suppressed} (suppressed in "
+            f"{suppress.SUPPRESSIONS_FILENAME})"
+        )
     if not parts:
         return None
     return f"Filter active: {'; '.join(parts)}."
+
+
+def _load_suppressions() -> suppress.SuppressionStore | None:
+    """Loads suppressions.json from the working directory, printing the
+    (already plain-language) reason and returning None if it's broken,
+    so the caller can stop with EXIT_ERROR before any slow work."""
+    try:
+        return suppress.load(suppress.default_path())
+    except suppress.SuppressionFileError as e:
+        print(e)
+        return None
+
+
+def _skipped_rules(
+    finding_filter: rules.FindingFilter, store: suppress.SuppressionStore
+) -> frozenset[str]:
+    """Rules not to run at all: --disable-rule ones, plus rules
+    suppressed as a whole -- unless --include-suppressed asks to see
+    their findings anyway."""
+    if finding_filter.include_suppressed:
+        return finding_filter.disabled_rules
+    return finding_filter.disabled_rules | store.suppressed_rules
+
+
+def _suppressed_hint(n_suppressed: int) -> str:
+    return (
+        f"{n_suppressed} suppressed finding(s) hidden (see "
+        f"{suppress.SUPPRESSIONS_FILENAME}; use --include-suppressed to show "
+        "them)."
+    )
 
 
 def _findings_exit_code(counts: dict[str, int], fail_on: str | None) -> int:
@@ -224,20 +268,46 @@ def _print_findings(title, findings):
     print(f"  {_format_severity_summary(rules.count_by_severity(findings))}")
 
 
+def _print_suppressed(
+    suppressed: list[tuple[rules.Finding, suppress.Suppression]],
+    include_suppressed: bool,
+) -> None:
+    """Lists suppressed findings (--include-suppressed) or just says
+    how many were hidden, so a quieter --check isn't mistaken for a
+    cleaner article."""
+    if not suppressed:
+        return
+    if not include_suppressed:
+        print(f"  {_suppressed_hint(len(suppressed))}")
+        return
+    print(f"  Suppressed findings ({len(suppressed)}, not counted above):")
+    for f, suppression in suppressed:
+        message = _sanitize_console_text(f.message)
+        reason = _sanitize_console_text(suppression.reason or "no reason given")
+        print(
+            f"  [{f.severity.upper():9s}] {f.rule_id}: {message} (Suppressed: {reason})"
+        )
+
+
 def run_check(
     target, session=None, finding_filter: rules.FindingFilter | None = None
 ) -> int:
     """Checks a single article (title/URL) or local wikitext file and
     prints the findings `finding_filter` keeps (default: all) to the
-    console. Returns a process exit code: EXIT_ERROR if the
+    console, minus suppressed ones (see suppress.py). Returns a process
+    exit code: EXIT_ERROR if the suppressions file is broken or the
     target/template couldn't be resolved, else EXIT_FINDINGS if the
-    filter's `fail_on` is set and a kept finding reaches that severity,
-    else EXIT_OK."""
+    filter's `fail_on` is set and a kept, unsuppressed finding reaches
+    that severity, else EXIT_OK."""
     session = session or fetch.get_session()
     finding_filter = finding_filter or rules.FindingFilter()
+    store = _load_suppressions()
+    if store is None:
+        return EXIT_ERROR
+    skipped = _skipped_rules(finding_filter, store)
 
     print(f"Checking '{_sanitize_console_text(target)}' ...")
-    if filter_note := _describe_filter(finding_filter):
+    if filter_note := _describe_filter(finding_filter, store.suppressed_rules):
         print(filter_note)
 
     if os.path.isfile(target):
@@ -275,7 +345,7 @@ def run_check(
     # The existence lookups are the only costly part of a rule, so skip
     # them when the only rule needing them is disabled anyway.
     nation_codes = []
-    if not finding_filter.is_disabled("nation_code_unknown"):
+    if "nation_code_unknown" not in skipped:
         nation_codes = rules.nation_codes_to_check(params.get("nation", ""))
     nation_exists = None
     if nation_codes:
@@ -284,7 +354,7 @@ def run_check(
         )
 
     discipline = None
-    if not finding_filter.is_disabled("discipline_link_unknown"):
+    if "discipline_link_unknown" not in skipped:
         discipline = rules.discipline_candidate(params.get("disziplin", ""))
     discipline_exists = None
     if discipline:
@@ -296,10 +366,12 @@ def run_check(
             categories=categories,
             nation_exists=nation_exists,
             discipline_exists=discipline_exists,
-            skip_rules=finding_filter.disabled_rules,
+            skip_rules=skipped,
         )
     )
+    findings, suppressed = store.partition(title, findings, params)
     _print_findings(title, findings)
+    _print_suppressed(suppressed, finding_filter.include_suppressed)
     return _findings_exit_code(
         rules.count_by_severity(findings), finding_filter.fail_on
     )
@@ -351,17 +423,23 @@ def run_scan(
 ) -> int:
     """Fetches all articles embedding the template, runs the rule checks
     across the whole corpus, and writes the HTML report with the
-    findings `finding_filter` keeps (default: all). Returns a process
-    exit code: EXIT_ERROR if the report couldn't be written, else
-    EXIT_FINDINGS if the filter's `fail_on` is set and a kept finding
-    reaches that severity, else EXIT_OK. Findings are checked only
-    after the report is written and opened, so a failing CI run still
-    leaves the report behind."""
+    findings `finding_filter` keeps (default: all); suppressed findings
+    (see suppress.py) go to a separate report section. Returns a process
+    exit code: EXIT_ERROR if the suppressions file is broken or the
+    report couldn't be written, else EXIT_FINDINGS if the filter's
+    `fail_on` is set and a kept, unsuppressed finding reaches that
+    severity, else EXIT_OK. Findings are checked only after the report
+    is written and opened, so a failing CI run still leaves the report
+    behind."""
     session = fetch.get_session()
     finding_filter = finding_filter or rules.FindingFilter()
+    store = _load_suppressions()
+    if store is None:
+        return EXIT_ERROR
+    skipped = _skipped_rules(finding_filter, store)
 
     _warn_if_cache_stale(use_cache, overwrite_cache)
-    filter_note = _describe_filter(finding_filter)
+    filter_note = _describe_filter(finding_filter, store.suppressed_rules)
     if filter_note:
         print(filter_note)
 
@@ -389,37 +467,48 @@ def run_scan(
             all_disciplines.add(discipline)
 
     # Skip the existence lookups (the only costly part of a rule) when
-    # the only rule needing them is disabled anyway.
+    # the only rule needing them is disabled or suppressed anyway.
     nation_exists = None
-    if not finding_filter.is_disabled("nation_code_unknown"):
+    if "nation_code_unknown" not in skipped:
         print(f"Checking {len(all_nation_codes)} distinct nation codes ...")
         nation_exists = fetch.templates_exist(
             session, [f"Vorlage:{code}" for code in all_nation_codes]
         )
 
     discipline_exists = None
-    if not finding_filter.is_disabled("discipline_link_unknown"):
+    if "discipline_link_unknown" not in skipped:
         print(f"Checking {len(all_disciplines)} distinct bare discipline links ...")
         discipline_exists = fetch.templates_exist(session, list(all_disciplines))
 
     print("Running rule checks ...")
     results = {}
+    suppression_view = report.SuppressionView(
+        store=store,
+        path=suppress.default_path(),
+        include_suppressed=finding_filter.include_suppressed,
+    )
     for title, (params, categories) in parsed.items():
-        results[title] = finding_filter.apply(
+        findings = finding_filter.apply(
             rules.run_all_checks(
                 params,
                 categories=categories,
                 nation_exists=nation_exists,
                 discipline_exists=discipline_exists,
-                skip_rules=finding_filter.disabled_rules,
+                skip_rules=skipped,
             )
         )
+        results[title], suppressed = store.partition(title, findings, params)
+        suppression_view.add_article(title, params, results[title], suppressed)
 
     output_path = os.path.abspath(output)
     print(f"Writing report to '{output_path}' ...")
     try:
         report.generate_html_report(
-            results, output, n_scanned=len(parsed), filter_note=filter_note
+            results,
+            output,
+            n_scanned=len(parsed),
+            filter_note=filter_note,
+            suppressions=suppression_view,
         )
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
@@ -431,8 +520,17 @@ def run_scan(
     severity_summary = _format_severity_summary(counts)
     print(
         f"\nDone. {n_with_findings} of {len(parsed)} articles have "
-        f"findings. {severity_summary} Report: {output_path}\n"
+        f"findings. {severity_summary} Report: {output_path}"
     )
+    if n_suppressed := len(suppression_view.suppressed):
+        if finding_filter.include_suppressed:
+            print(
+                f"{n_suppressed} suppressed finding(s) are marked as such in "
+                "the report and not counted above."
+            )
+        else:
+            print(_suppressed_hint(n_suppressed))
+    print()
 
     if open_output:
         print(f"Opening report in your default browser: {output_path} ...")
@@ -520,12 +618,21 @@ def main():
         "the README lists all of them. Disabled findings never cause "
         "exit code 1",
     )
+    parser.add_argument(
+        "--include-suppressed",
+        action="store_true",
+        help="Also show findings you suppressed as false positives (in "
+        "suppressions.json, created from the HTML report), marked as "
+        "suppressed and with your reason. They still never cause exit "
+        "code 1",
+    )
     args = parser.parse_args()
     finding_filter = rules.FindingFilter(
         disabled_rules=frozenset(
             rule_id for ids in args.disable_rule for rule_id in ids
         ),
         fail_on=args.fail_on,
+        include_suppressed=args.include_suppressed,
     )
 
     # args.check is "" (falsy, but not None) when the user passes
