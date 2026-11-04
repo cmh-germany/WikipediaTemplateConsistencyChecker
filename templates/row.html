@@ -1,4 +1,5 @@
-<tr data-severity="$severity">
+<tr class="$row_class" data-severity="$severity" data-key="$key" data-suppression="$suppression_index" data-rule="$rule_id" data-article="$title" data-fingerprint="$fingerprint" data-message="$message">
+  <td class="suppress-cell"><input type="checkbox" class="suppress-cb" title="Suppress this finding as a false positive"$checked><input type="text" class="reason" placeholder="Reason (optional)" value="$reason"></td>
   <td data-sort="$severity_rank"><span class="sev" style="background:$color">$severity</span></td>
   <td data-sort="$rule_sort">$rule_title <span class="rule-id">($rule_id)</span></td>
   <td data-sort="$article_sort"><a href="$url" target="_blank" rel="noopener">$title</a></td>
