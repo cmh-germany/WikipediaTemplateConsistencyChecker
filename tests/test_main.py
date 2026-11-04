@@ -1169,6 +1169,27 @@ def test_run_check_disabled_rule_is_not_printed_and_does_not_fail(tmp_path, caps
     assert "No findings." in out
 
 
+def test_run_check_disabled_rule_is_not_run(monkeypatch, tmp_path):
+    called = []
+
+    def _spy_check(ctx):
+        called.append(ctx)
+        return []
+
+    monkeypatch.setattr(
+        main.rules, "CHECK_RULE_IDS", {_spy_check: frozenset({"missing_birthplace"})}
+    )
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"missing_birthplace"})
+    )
+
+    main.run_check(str(path), finding_filter=finding_filter)
+
+    assert called == []
+
+
 def test_run_check_disabled_rule_combined_with_fail_on(tmp_path, capsys):
     # The high finding is disabled and the low one is below --fail-on,
     # so nothing is left.
