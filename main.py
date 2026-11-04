@@ -296,6 +296,7 @@ def run_check(
             categories=categories,
             nation_exists=nation_exists,
             discipline_exists=discipline_exists,
+            skip_rules=finding_filter.disabled_rules,
         )
     )
     _print_findings(title, findings)
@@ -410,6 +411,7 @@ def run_scan(
                 categories=categories,
                 nation_exists=nation_exists,
                 discipline_exists=discipline_exists,
+                skip_rules=finding_filter.disabled_rules,
             )
         )
 
@@ -511,7 +513,7 @@ def main():
         action="append",
         default=[],
         metavar="RULE_ID[,RULE_ID...]",
-        help="Don't report findings of these rules (comma-separated, and "
+        help="Don't run these rules for this run (comma-separated, and "
         "the flag can be repeated), e.g. --disable-rule "
         "missing_birthplace,update_outdated. The rule ID is shown next to "
         "each finding in --check output and in the report's Rule column; "
