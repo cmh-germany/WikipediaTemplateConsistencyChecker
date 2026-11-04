@@ -15,20 +15,29 @@
   table { border-collapse: collapse; width: 100%; }
   th, td { text-align: left; padding: 0.5em 0.7em; border-bottom: 1px solid #ddd; vertical-align: top; }
   th { background: #f5f5f5; position: sticky; top: 0; cursor: pointer; user-select: none; white-space: nowrap; }
+  th.no-sort { cursor: default; }
   th::after { content: ""; display: inline-block; width: 1em; }
   th.sort-asc::after { content: "\25B2"; }
   th.sort-desc::after { content: "\25BC"; }
   tr:hover { background: #fafafa; }
+  tr.suppressed-row { opacity: 0.55; }
   .sev { display: inline-block; padding: 0.15em 0.6em; border-radius: 0.8em; color: white; font-size: 0.85em; white-space: nowrap; }
   .rule-id { color: #999; font-size: 0.8em; }
   code { background: #f0f0f0; padding: 0.1em 0.35em; border-radius: 0.3em; font-size: 0.9em; }
   a { color: #2c5aa0; text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .scanned-section { margin-top: 2em; }
-  .scanned-section summary { cursor: pointer; font-weight: bold; }
+  .suppress-cell { white-space: nowrap; }
+  .suppress-cell .reason { display: none; margin-left: 0.4em; width: 12em; }
+  .suppress-cell .suppress-cb:checked + .reason { display: inline-block; }
+  .scanned-section, .suppressed-section, .rules-section { margin-top: 2em; }
+  .scanned-section summary, .suppressed-section summary, .rules-section summary { cursor: pointer; font-weight: bold; }
+  .section-hint { color: #555; }
   .scanned-list { columns: 3; column-gap: 2em; margin-top: 1em; }
   .scanned-list li { break-inside: avoid; }
   .n-findings { color: #999; }
+  .save-bar { position: sticky; bottom: 0; background: #fffbe6; border-top: 1px solid #e0d38a; padding: 0.6em 0.8em; margin-top: 2em; }
+  .save-bar button { margin: 0 0.8em; }
+  .save-hint { color: #555; font-size: 0.9em; }
 </style>
 </head>
 <body>
@@ -36,7 +45,7 @@
 <div class="meta">
   Generated on $generated_at &middot;
   $n_articles_with_findings of $n_scanned checked articles have findings &middot;
-  $n_findings findings in total &middot;
+  $n_findings findings in total$suppressed_note &middot;
   Rules based on <a href="$template_doc_url" target="_blank" rel="noopener">Vorlage:Infobox Leichtathlet</a>
   $filter_note
 </div>
@@ -46,6 +55,7 @@
 <table id="report-table">
 <thead>
 <tr>
+  <th class="no-sort" title="Tick to suppress a finding as a false positive">Suppress</th>
   <th class="sort-asc">Severity</th>
   <th>Rule</th>
   <th>Article</th>
@@ -58,13 +68,21 @@
 $rows
 </tbody>
 </table>
+$suppressed_section
+$rules_section
 $scanned_section
+<div class="save-bar">
+  <span id="save-status">No unsaved suppression changes.</span>
+  <button type="button" id="save-button">Save suppressions file&hellip;</button>
+  <span class="save-hint">Save it as <code>$suppressions_path</code> (replacing the existing file), then run the tool again to apply it.</span>
+</div>
+<script type="application/json" id="suppressions-data">$suppressions_json</script>
 <script>
 (function() {
   var table = document.getElementById('report-table');
   var tbody = table.tBodies[0];
   var headers = Array.from(table.querySelectorAll('thead th'));
-  var state = { col: 0, dir: 1 };
+  var state = { col: 1, dir: 1 };
 
   function sortBy(colIndex, dir) {
     var rows = Array.from(tbody.rows);
@@ -80,6 +98,7 @@ $scanned_section
   }
 
   headers.forEach(function(th, idx) {
+    if (th.classList.contains('no-sort')) { return; }
     th.addEventListener('click', function() {
       var dir = (state.col === idx) ? -state.dir : 1;
       state = { col: idx, dir: dir };
@@ -98,6 +117,138 @@ document.querySelectorAll('.filters input[type=checkbox]').forEach(function(cb) 
     });
   });
 });
+
+// Suppressions: every row with a .suppress-cb checkbox is either an
+// existing entry of suppressions.json (data-suppression = its index) or
+// a candidate for a new one. Rows sharing a data-key stand for the same
+// entry (e.g. one entry matching several findings) and are kept in sync.
+(function() {
+  var original = JSON.parse(document.getElementById('suppressions-data').textContent);
+  var rows = Array.from(document.querySelectorAll('tr[data-key]'));
+  var status = document.getElementById('save-status');
+
+  function parts(row) {
+    return { cb: row.querySelector('.suppress-cb'), reason: row.querySelector('.reason') };
+  }
+
+  function today() {
+    var d = new Date();
+    var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function changedKeys() {
+    var keys = {};
+    rows.forEach(function(row) {
+      var p = parts(row);
+      if (p.cb.checked !== p.cb.defaultChecked || p.reason.value !== p.reason.defaultValue) {
+        keys[row.dataset.key] = true;
+      }
+    });
+    return Object.keys(keys).length;
+  }
+
+  function updateStatus() {
+    var n = changedKeys();
+    status.textContent = n ? n + ' unsaved suppression change(s).' : 'No unsaved suppression changes.';
+  }
+
+  // Builds the complete file from the original entries plus the
+  // current state of every row, so it is correct no matter how often
+  // it is saved.
+  function collect() {
+    var kept = original.suppressions.map(function(s) { return Object.assign({}, s); });
+    var removed = {};
+    var added = {};
+    rows.forEach(function(row) {
+      var p = parts(row);
+      var reason = p.reason.value.trim();
+      if (row.dataset.suppression !== '') {
+        var index = Number(row.dataset.suppression);
+        if (!p.cb.checked) { removed[index] = true; return; }
+        if (reason) { kept[index].reason = reason; } else { delete kept[index].reason; }
+        return;
+      }
+      if (!p.cb.checked || added[row.dataset.key]) { return; }
+      var entry = { rule_id: row.dataset.rule };
+      if (row.dataset.article) { entry.article = row.dataset.article; }
+      if (row.dataset.fingerprint) { entry.fingerprint = row.dataset.fingerprint; }
+      if (row.dataset.message) { entry.message = row.dataset.message; }
+      if (reason) { entry.reason = reason; }
+      entry.created = today();
+      added[row.dataset.key] = entry;
+    });
+    var suppressions = kept.filter(function(_, i) { return !removed[i]; })
+      .concat(Object.keys(added).map(function(k) { return added[k]; }));
+    return { version: original.version, suppressions: suppressions };
+  }
+
+  function markSaved() {
+    rows.forEach(function(row) {
+      var p = parts(row);
+      p.cb.defaultChecked = p.cb.checked;
+      p.reason.defaultValue = p.reason.value;
+    });
+    updateStatus();
+    status.textContent = 'Saved. Run the tool again to apply it. ' + status.textContent;
+  }
+
+  function download(text) {
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    link.download = 'suppressions.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  async function save() {
+    var text = JSON.stringify(collect(), null, 2) + '\n';
+    if (window.showSaveFilePicker) {
+      try {
+        var handle = await window.showSaveFilePicker({
+          suggestedName: 'suppressions.json',
+          types: [{ description: 'Suppressions file', accept: { 'application/json': ['.json'] } }]
+        });
+        var writable = await handle.createWritable();
+        await writable.write(text);
+        await writable.close();
+        markSaved();
+        return;
+      } catch (e) {
+        if (e.name === 'AbortError') { return; }
+        // Any other failure (e.g. not allowed for local files): fall
+        // back to a normal download below.
+      }
+    }
+    download(text);
+    markSaved();
+  }
+
+  rows.forEach(function(row) {
+    var p = parts(row);
+    p.cb.addEventListener('change', function() {
+      rows.forEach(function(other) {
+        if (other !== row && other.dataset.key === row.dataset.key) {
+          parts(other).cb.checked = p.cb.checked;
+        }
+      });
+      updateStatus();
+    });
+    p.reason.addEventListener('input', function() {
+      rows.forEach(function(other) {
+        if (other !== row && other.dataset.key === row.dataset.key) {
+          parts(other).reason.value = p.reason.value;
+        }
+      });
+      updateStatus();
+    });
+  });
+  document.getElementById('save-button').addEventListener('click', save);
+  window.addEventListener('beforeunload', function(e) {
+    if (changedKeys()) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
 </script>
 </body>
 </html>

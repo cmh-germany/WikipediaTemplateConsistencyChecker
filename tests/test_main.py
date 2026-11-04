@@ -10,9 +10,11 @@ run_check/run_scan themselves make real network calls via fetch.py, so
 every test here either fully mocks fetch/report, or (for --scan)
 replaces run_scan itself, to keep the suite network-free."""
 
+import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -33,6 +35,13 @@ def _recording_stub(calls: list[dict]):
         return 0
 
     return _stub
+
+
+def _has_finding_row(report_html: str, rule_id: str) -> bool:
+    """Whether the report has a finding row (main table or suppressed
+    section) for `rule_id`. Plain substring checks no longer work since
+    the "Suppress whole rules" section names every rule."""
+    return f'data-rule="{rule_id}" data-article=' in report_html
 
 
 # ---------------------------------------------------------------------
@@ -1014,8 +1023,8 @@ def test_run_scan_fail_on_hides_findings_in_report_and_summary(
     out = capsys.readouterr().out
     assert "Total findings: 1 (Very high: 0, High: 1, Medium: 0, Low: 0)" in out
     report_html = output.read_text(encoding="utf-8")
-    assert "death_date_with_non_deceased_status" in report_html
-    assert "missing_birthplace" not in report_html
+    assert _has_finding_row(report_html, "death_date_with_non_deceased_status")
+    assert not _has_finding_row(report_html, "missing_birthplace")
 
 
 @pytest.mark.parametrize(
@@ -1169,6 +1178,27 @@ def test_run_check_disabled_rule_is_not_printed_and_does_not_fail(tmp_path, caps
     assert "No findings." in out
 
 
+def test_run_check_disabled_rule_is_not_run(monkeypatch, tmp_path):
+    called = []
+
+    def _spy_check(ctx):
+        called.append(ctx)
+        return []
+
+    monkeypatch.setattr(
+        main.rules, "CHECK_RULE_IDS", {_spy_check: frozenset({"missing_birthplace"})}
+    )
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    finding_filter = main.rules.FindingFilter(
+        disabled_rules=frozenset({"missing_birthplace"})
+    )
+
+    main.run_check(str(path), finding_filter=finding_filter)
+
+    assert called == []
+
+
 def test_run_check_disabled_rule_combined_with_fail_on(tmp_path, capsys):
     # The high finding is disabled and the low one is below --fail-on,
     # so nothing is left.
@@ -1195,11 +1225,11 @@ def test_run_scan_disabled_rule_is_left_out_of_report(monkeypatch, capsys, tmp_p
     assert "Total findings: 1 (Very high: 0, High: 0, Medium: 0, Low: 1)" in (
         capsys.readouterr().out
     )
-    # Rule ids appear in finding rows as "(rule_id)"; the disabled id
-    # itself is still named in the report's filter note.
+    # The disabled id itself is still named in the report's filter note
+    # and its "Suppress whole rules" row, just not in a finding row.
     report_html = output.read_text(encoding="utf-8")
-    assert "(missing_birthplace)" in report_html
-    assert "(death_date_with_non_deceased_status)" not in report_html
+    assert _has_finding_row(report_html, "missing_birthplace")
+    assert not _has_finding_row(report_html, "death_date_with_non_deceased_status")
 
 
 _NATION_AND_DISCIPLINE_WIKITEXT = (
@@ -1332,12 +1362,15 @@ def test_run_scan_report_has_no_filter_note_by_default(monkeypatch, tmp_path):
 
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess:
+    # Runs in the test's throwaway working directory (see conftest.py),
+    # so a real suppressions.json next to main.py can't change the
+    # asserted exit codes.
     return subprocess.run(
         [sys.executable, MAIN_PY, *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
-        cwd=os.path.dirname(MAIN_PY),
+        cwd=os.getcwd(),
         timeout=60,
     )
 
@@ -1402,3 +1435,228 @@ def test_cli_check_disabling_the_only_firing_rule_exits_0(tmp_path):
     path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
     result = _run_cli("--check", str(path), "--disable-rule", "missing_birthplace")
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# ---------------------------------------------------------------------
+# Suppressions (suppressions.json in the working directory, which
+# conftest.py points at the test's tmp_path)
+# ---------------------------------------------------------------------
+
+
+def _write_suppressions(*entries: dict) -> None:
+    main.suppress.default_path().write_text(
+        json.dumps({"version": 1, "suppressions": list(entries)}), encoding="utf-8"
+    )
+
+
+def _high_and_low_draft(tmp_path) -> str:
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_HIGH_AND_LOW_WIKITEXT, encoding="utf-8")
+    return str(path)
+
+
+def test_include_suppressed_flag_defaults_to_false(monkeypatch):
+    calls: list[dict] = []
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan"])
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
+    main.main()
+    assert calls[0]["finding_filter"].include_suppressed is False
+
+
+def test_include_suppressed_flag_is_passed_through(monkeypatch):
+    calls: list[dict] = []
+    monkeypatch.setattr(sys, "argv", ["main.py", "--scan", "--include-suppressed"])
+    monkeypatch.setattr(main, "run_scan", _recording_stub(calls))
+    main.main()
+    assert calls[0]["finding_filter"].include_suppressed is True
+
+
+def test_run_check_hides_suppressed_finding_and_prints_hint(tmp_path, capsys):
+    _write_suppressions(
+        {"rule_id": "death_date_with_non_deceased_status", "article": "draft.wikitext"}
+    )
+
+    result = main.run_check(_high_and_low_draft(tmp_path))
+
+    out = capsys.readouterr().out
+    assert "] death_date_with_non_deceased_status:" not in out
+    assert "] missing_birthplace:" in out
+    assert "Total findings: 1 (Very high: 0, High: 0, Medium: 0, Low: 1)" in out
+    assert "1 suppressed finding(s) hidden" in out
+    assert "--include-suppressed" in out
+    assert result == main.EXIT_FINDINGS  # the low finding is still there
+
+
+def test_run_check_suppressed_findings_never_cause_exit_1(tmp_path):
+    _write_suppressions(
+        {"rule_id": "death_date_with_non_deceased_status", "article": "draft.wikitext"},
+        {"rule_id": "missing_birthplace", "article": "draft.wikitext"},
+    )
+    assert main.run_check(_high_and_low_draft(tmp_path)) == main.EXIT_OK
+
+
+def test_run_check_include_suppressed_lists_them_marked(tmp_path, capsys):
+    _write_suppressions(
+        {
+            "rule_id": "death_date_with_non_deceased_status",
+            "article": "draft.wikitext",
+            "reason": "known \x1b[2J case",
+        },
+        {"rule_id": "missing_birthplace", "article": "draft.wikitext"},
+    )
+    finding_filter = main.rules.FindingFilter(include_suppressed=True)
+
+    result = main.run_check(
+        _high_and_low_draft(tmp_path), finding_filter=finding_filter
+    )
+
+    out = capsys.readouterr().out
+    assert result == main.EXIT_OK
+    assert "No findings." in out
+    assert "Suppressed findings (2, not counted above):" in out
+    assert "(Suppressed: known \\x1b[2J case)" in out
+    assert "(Suppressed: no reason given)" in out
+
+
+def test_run_check_suppression_lapses_when_field_changes(tmp_path, capsys):
+    draft = _high_and_low_draft(tmp_path)
+    params = main.parse.parse_infobox_params(_HIGH_AND_LOW_WIKITEXT)
+    finding = next(
+        f
+        for f in main.rules.run_all_checks(params)
+        if f.rule_id == "death_date_with_non_deceased_status"
+    )
+    _write_suppressions(
+        {
+            "rule_id": finding.rule_id,
+            "article": "draft.wikitext",
+            "fingerprint": main.suppress.fingerprint(finding, params),
+        }
+    )
+    main.run_check(draft)
+    assert "] death_date_with_non_deceased_status:" not in capsys.readouterr().out
+
+    Path(draft).write_text(
+        _HIGH_AND_LOW_WIKITEXT.replace("2020-01-01", "2021-01-01"), encoding="utf-8"
+    )
+    main.run_check(draft)
+    assert "] death_date_with_non_deceased_status:" in capsys.readouterr().out
+
+
+def test_run_check_whole_rule_suppression_is_not_run(monkeypatch, tmp_path, capsys):
+    called = []
+
+    def _spy_check(ctx):
+        called.append(ctx)
+        return []
+
+    monkeypatch.setattr(
+        main.rules, "CHECK_RULE_IDS", {_spy_check: frozenset({"missing_birthplace"})}
+    )
+    _write_suppressions({"rule_id": "missing_birthplace"})
+
+    main.run_check(_high_and_low_draft(tmp_path))
+
+    assert called == []
+    assert (
+        "not running rule(s) missing_birthplace (suppressed in suppressions.json)"
+        in capsys.readouterr().out
+    )
+
+
+def test_run_check_include_suppressed_runs_whole_rule_suppressions(tmp_path, capsys):
+    _write_suppressions({"rule_id": "missing_birthplace", "reason": "noise"})
+    finding_filter = main.rules.FindingFilter(include_suppressed=True)
+
+    main.run_check(_high_and_low_draft(tmp_path), finding_filter=finding_filter)
+
+    out = capsys.readouterr().out
+    assert "missing_birthplace: " in out
+    assert "(Suppressed: noise)" in out
+    assert "not running rule(s)" not in out
+
+
+def test_run_check_whole_rule_suppression_skips_lookups(monkeypatch, tmp_path):
+    lookups = _record_template_lookups(monkeypatch)
+    path = tmp_path / "draft.wikitext"
+    path.write_text(_NATION_AND_DISCIPLINE_WIKITEXT, encoding="utf-8")
+    _write_suppressions({"rule_id": "nation_code_unknown"})
+
+    main.run_check(str(path))
+
+    assert lookups == [["Blitzlauf"]]
+
+
+def test_run_check_broken_suppressions_file_exits_2(tmp_path, capsys):
+    main.suppress.default_path().write_text("{broken", encoding="utf-8")
+
+    result = main.run_check(_high_and_low_draft(tmp_path))
+
+    assert result == main.EXIT_ERROR
+    assert "suppressions file" in capsys.readouterr().out
+
+
+def test_run_scan_broken_suppressions_file_exits_2(monkeypatch, capsys, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    main.suppress.default_path().write_text("{broken", encoding="utf-8")
+
+    result = main.run_scan(output=str(tmp_path / "report.html"))
+
+    assert result == main.EXIT_ERROR
+    assert not (tmp_path / "report.html").exists()
+
+
+def test_run_scan_moves_suppressed_findings_to_their_own_section(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    _write_suppressions(
+        {
+            "rule_id": "death_date_with_non_deceased_status",
+            "article": "Dead Athlete",
+            "reason": "checked by hand",
+        }
+    )
+    output = tmp_path / "report.html"
+
+    result = main.run_scan(output=str(output))
+
+    out = capsys.readouterr().out
+    assert result == main.EXIT_FINDINGS
+    assert "Total findings: 1 (Very high: 0, High: 0, Medium: 0, Low: 1)" in out
+    assert "1 suppressed finding(s) hidden" in out
+    report_html = output.read_text(encoding="utf-8")
+    main_table, suppressed_section = report_html.split('class="suppressed-section"')
+    assert _has_finding_row(main_table, "missing_birthplace")
+    assert not _has_finding_row(main_table, "death_date_with_non_deceased_status")
+    assert _has_finding_row(suppressed_section, "death_date_with_non_deceased_status")
+    assert 'value="checked by hand"' in suppressed_section
+
+
+def test_run_scan_include_suppressed_marks_them_in_main_table(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    _write_suppressions(
+        {"rule_id": "death_date_with_non_deceased_status", "article": "Dead Athlete"}
+    )
+    output = tmp_path / "report.html"
+    finding_filter = main.rules.FindingFilter(include_suppressed=True)
+
+    main.run_scan(output=str(output), finding_filter=finding_filter)
+
+    out = capsys.readouterr().out
+    assert "Total findings: 1 (Very high: 0, High: 0, Medium: 0, Low: 1)" in out
+    assert "1 suppressed finding(s) are marked as such in the report" in out
+    report_html = output.read_text(encoding="utf-8")
+    assert 'class="suppressed-section"' not in report_html
+    assert 'class="suppressed-row"' in report_html
+
+
+def test_cli_check_suppressed_findings_exit_0(tmp_path):
+    _write_suppressions({"rule_id": "missing_birthplace"})
+    path = tmp_path / "draft.wikitext"
+    path.write_text("{{Infobox Leichtathlet|status=a}}", encoding="utf-8")
+    result = _run_cli("--check", str(path))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "not running rule(s) missing_birthplace" in result.stdout

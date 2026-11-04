@@ -561,11 +561,13 @@ def test_finding_filter_on_real_findings(bolt_params):
     assert disabled.apply(findings) == []
 
 
-def _emitted_rule_ids() -> set[str]:
+def _emitted_rule_ids(tree: ast.AST | None = None) -> set[str]:
     """Collects every rule_id passed to a Finding(...) call in
-    rules.py, expanding the f"{label}_..." ids of
-    check_height_weight_plausibility for both of its labels."""
-    tree = ast.parse(Path(rules.__file__).read_text(encoding="utf-8"))
+    rules.py (or just in `tree`, e.g. one function), expanding the
+    f"{label}_..." ids of check_height_weight_plausibility for both of
+    its labels."""
+    if tree is None:
+        tree = ast.parse(Path(rules.__file__).read_text(encoding="utf-8"))
     ids: set[str] = set()
     for node in ast.walk(tree):
         if not (
@@ -593,3 +595,51 @@ def test_every_emitted_rule_id_has_a_title():
     emitted = _emitted_rule_ids()
     assert emitted
     assert emitted <= set(rules.RULE_TITLES)
+
+
+def test_check_rule_ids_match_the_ids_each_check_emits():
+    # run_all_checks skips a check function based on CHECK_RULE_IDS, so
+    # an id missing there would make the function look skippable while
+    # it can still emit that id (or never skip it at all).
+    tree = ast.parse(Path(rules.__file__).read_text(encoding="utf-8"))
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    for check_fn, declared in rules.CHECK_RULE_IDS.items():
+        assert _emitted_rule_ids(functions[check_fn.__name__]) == declared, (
+            check_fn.__name__
+        )
+
+
+def test_check_rule_ids_cover_every_titled_rule():
+    covered = set().union(*rules.CHECK_RULE_IDS.values())
+    assert covered == set(rules.RULE_TITLES)
+
+
+def _raising_check(ctx):
+    raise AssertionError("a fully skipped check must not run")
+
+
+def test_run_all_checks_skips_check_when_all_its_ids_are_skipped(monkeypatch):
+    monkeypatch.setattr(
+        rules,
+        "CHECK_RULE_IDS",
+        {_raising_check: frozenset({"missing_birthplace"})},
+    )
+    assert check({}, skip_rules=frozenset({"missing_birthplace"})) == []
+
+
+def test_run_all_checks_runs_check_when_only_some_ids_are_skipped():
+    # status_code_spelled_out shares check_invalid_status_code with
+    # invalid_status_code, so skipping the latter alone must not stop
+    # the former from being found.
+    params = {"status": "aktiv", "geburtsort": "Berlin"}
+    findings = check(params, skip_rules=frozenset({"invalid_status_code"}))
+    assert "status_code_spelled_out" in finding_ids(findings)
+
+
+def test_run_all_checks_skipped_rule_produces_no_findings():
+    params = {"status": "a"}
+    assert "missing_birthplace" in finding_ids(check(params))
+    skipped = check(params, skip_rules=frozenset({"missing_birthplace"}))
+    assert "missing_birthplace" not in finding_ids(skipped)

@@ -26,6 +26,15 @@ def isolated_throttle_lock_file(tmp_path, monkeypatch):
     return path
 
 
+@pytest.fixture(autouse=True)
+def isolated_working_directory(tmp_path, monkeypatch):
+    """Runs every test in a throwaway working directory, so the suite
+    never reads (or is affected by) a real suppressions.json, which
+    lives in the working directory (see suppress.default_path)."""
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
 def load_fixture(name):
     path = os.path.join(FIXTURES_DIR, name)
     with open(path, encoding="utf-8") as f:

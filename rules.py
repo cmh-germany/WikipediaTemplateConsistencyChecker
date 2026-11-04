@@ -1,11 +1,12 @@
 """Consistency rules for the Infobox Leichtathlet parameters.
 
 Each rule is a standalone function `check_*(ctx) -> list[Finding]`. New
-rules can simply be added and registered in ALL_RULES without touching
-existing rules.
+rules can simply be added and registered in CHECK_RULE_IDS (together
+with the rule IDs they emit) without touching existing rules.
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -133,6 +134,11 @@ class FindingFilter:
 
     disabled_rules: frozenset[str] = frozenset()
     fail_on: str | None = LOW
+    # --include-suppressed: show suppressed findings (marked as such)
+    # instead of hiding them; they still never count towards the exit
+    # code. Applied by the caller, since matching a suppression needs
+    # the article and its infobox values (see suppress.py).
+    include_suppressed: bool = False
 
     def is_disabled(self, rule_id: str) -> bool:
         return rule_id in self.disabled_rules
@@ -684,33 +690,63 @@ def check_outdated_update_while_active(ctx):
     return []
 
 
-ALL_RULES = [
-    check_death_date_with_non_deceased_status,
-    check_status_deceased_without_death_date,
-    check_invalid_status_code,
-    check_deceased_but_living_person_category,
-    check_death_date_before_birth_date,
-    check_birth_date_in_future,
-    check_death_date_in_future,
-    check_career_end_before_birth_date,
-    check_career_end_despite_active,
-    check_implausible_age_at_death,
-    check_national_squad_before_birth,
-    check_height_weight_plausibility,
-    check_nation_code,
-    check_discipline_link,
-    check_medal_count_mismatch,
-    check_medal_year_before_birth,
-    check_missing_birthplace,
-    check_outdated_update_while_active,
-]
+# Every check function, mapped to the rule IDs it can emit. Needed to
+# skip a check entirely when all of its IDs are disabled/suppressed
+# (users only ever name rule IDs, and one function can emit several).
+CHECK_RULE_IDS: dict[Callable[[Context], list[Finding]], frozenset[str]] = {
+    check_death_date_with_non_deceased_status: frozenset(
+        {"death_date_with_non_deceased_status"}
+    ),
+    check_status_deceased_without_death_date: frozenset(
+        {"status_deceased_without_death_date"}
+    ),
+    check_invalid_status_code: frozenset(
+        {"status_code_spelled_out", "invalid_status_code"}
+    ),
+    check_deceased_but_living_person_category: frozenset(
+        {"deceased_but_living_person_category"}
+    ),
+    check_death_date_before_birth_date: frozenset({"death_date_before_birth_date"}),
+    check_birth_date_in_future: frozenset({"birth_date_in_future"}),
+    check_death_date_in_future: frozenset({"death_date_in_future"}),
+    check_career_end_before_birth_date: frozenset({"career_end_before_birth_date"}),
+    check_career_end_despite_active: frozenset({"career_end_despite_active"}),
+    check_implausible_age_at_death: frozenset({"implausible_age_at_death"}),
+    check_national_squad_before_birth: frozenset(
+        {"national_squad_before_birth", "national_squad_implausibly_young"}
+    ),
+    check_height_weight_plausibility: frozenset(
+        f"{label}_{kind}"
+        for label in ("height", "weight")
+        for kind in ("comma_format", "not_numeric", "implausible")
+    ),
+    check_nation_code: frozenset({"nation_nonstandard_format", "nation_code_unknown"}),
+    check_discipline_link: frozenset({"discipline_link_unknown"}),
+    check_medal_count_mismatch: frozenset({"medal_count_mismatch"}),
+    check_medal_year_before_birth: frozenset(
+        {"medal_before_birth", "medal_implausibly_young"}
+    ),
+    check_missing_birthplace: frozenset({"missing_birthplace"}),
+    check_outdated_update_while_active: frozenset({"update_outdated"}),
+}
+
+ALL_RULES = list(CHECK_RULE_IDS)
 
 
 def run_all_checks(
-    params, categories=None, today=None, nation_exists=None, discipline_exists=None
+    params,
+    categories=None,
+    today=None,
+    nation_exists=None,
+    discipline_exists=None,
+    skip_rules: frozenset[str] = frozenset(),
 ):
     """Runs every rule in ALL_RULES against the given infobox params and
-    returns all findings, sorted from most to least severe."""
+    returns all findings, sorted from most to least severe. A check
+    function is skipped entirely if every rule ID it can emit is in
+    `skip_rules` (disabled or suppressed); one that only partly is
+    still runs, so callers must still filter its findings (see
+    FindingFilter.apply)."""
     ctx = Context(
         params=params,
         categories=categories or [],
@@ -719,7 +755,9 @@ def run_all_checks(
         discipline_exists=discipline_exists,
     )
     findings = []
-    for rule in ALL_RULES:
+    for rule, rule_ids in CHECK_RULE_IDS.items():
+        if rule_ids <= skip_rules:
+            continue
         findings.extend(rule(ctx))
     findings.sort(key=lambda f: SEVERITY_ORDER[f.severity])
     return findings

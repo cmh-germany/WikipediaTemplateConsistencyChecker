@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 cache.json
+/suppressions.json
 /report.html
 .venv/
 .pytest_cache/

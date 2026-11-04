@@ -53,6 +53,7 @@
       <ul>
         <li><a href="#exit-codes-ci-usage">Exit Codes (CI Usage)</a></li>
         <li><a href="#hiding-rules-or-low-severity-findings">Hiding Rules or Low-Severity Findings</a></li>
+        <li><a href="#suppressing-false-positives">Suppressing False Positives</a></li>
         <li><a href="#running-several-scans-at-once">Running Several Scans at Once</a></li>
         <li><a href="#severity-levels">Severity Levels</a></li>
       </ul>
@@ -333,9 +334,9 @@ python main.py --scan --fail-on none                      # show everything, nev
 
 | Exit code | Meaning |
 |---|---|
-| `0` | Run completed; no finding is left after `--fail-on` and `--disable-rule` (by default: no findings at all) |
-| `1` | Run completed, and at least one finding reached the `--fail-on` severity (findings of [disabled rules](#hiding-rules-or-low-severity-findings) never count) |
-| `2` | The run failed (article/infobox not found, draft file unreadable, report couldn't be written) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity or `--disable-rule` rule ID) |
+| `0` | Run completed; no finding is left after `--fail-on`, `--disable-rule` and [suppressions](#suppressing-false-positives) (by default: no findings at all) |
+| `1` | Run completed, and at least one finding reached the `--fail-on` severity (findings of [disabled rules](#hiding-rules-or-low-severity-findings) and [suppressed findings](#suppressing-false-positives) never count, even with `--include-suppressed`) |
+| `2` | The run failed (article/infobox not found, draft file unreadable, report couldn't be written, `suppressions.json` invalid) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity or `--disable-rule` rule ID) |
 
 If you're not using the tool in an automated setup, you can ignore the
 exit code entirely — a `1` does **not** mean the tool crashed. The
@@ -359,9 +360,11 @@ shows and fails on, without editing any code:
 * `--fail-on SEVERITY` hides every finding below that severity (see
   [Exit Codes](#exit-codes-ci-usage) above) — e.g. a CI job that should
   only ever report and fail on high or very high findings.
-* `--disable-rule RULE_ID[,RULE_ID...]` hides every finding of the given
-  rule(s), e.g. a rule that's too noisy for what you're working on right
-  now. Separate several rule IDs with commas, or repeat the flag; `-` and
+* `--disable-rule RULE_ID[,RULE_ID...]` doesn't run the given rule(s) at
+  all for this run, e.g. a rule that's too noisy for what you're working
+  on right now (to switch a rule off for good, suppress it instead, see
+  [Suppressing False Positives](#suppressing-false-positives)).
+  Separate several rule IDs with commas, or repeat the flag; `-` and
   `_` are interchangeable (`missing-birthplace` works too). The rule ID
   is shown next to each finding in `--check` output (e.g.
   `[LOW      ] missing_birthplace: ...`) and in the report's Rule column;
@@ -378,9 +381,94 @@ python main.py --scan --fail-on medium --disable-rule update_outdated,nation_non
 Whenever something is hidden, the console prints a `Filter active: ...`
 line naming the active `--fail-on`/`--disable-rule` settings, and the
 HTML report repeats it in its header, so a filtered report isn't
-mistaken for a cleaner corpus. Disabling `nation_code_unknown` or
-`discipline_link_unknown` also skips the Wikipedia lookups those rules
-need, which makes a run slightly faster.
+mistaken for a cleaner corpus. Since disabled rules aren't run at all,
+disabling `nation_code_unknown` or `discipline_link_unknown` also skips
+the Wikipedia lookups those rules need, which makes a run slightly
+faster.
+
+### Suppressing False Positives
+
+Some findings are fine on closer inspection: a real edge case, or a
+known limitation of a rule. To stop seeing them in every run, suppress
+them. Suppressions are stored in a file called `suppressions.json` in
+the folder you run the tool from (usually the tool folder, next to
+`cache.json`). The file is not tracked by Git and is never uploaded
+anywhere.
+
+**From the HTML report** (the easiest way):
+
+1. Run a scan and open the report (`python main.py --scan --open`).
+2. Tick the checkbox in the first column ("Suppress") of each false
+   positive. A text box appears next to it; optionally type why, e.g.
+   "Birthplace is unknown according to the sources". To switch a rule
+   off for every article, open the **Suppress whole rules** section at
+   the bottom of the report and tick it there.
+3. Click **Save suppressions file…** in the bar at the bottom of the
+   page and save the file as `suppressions.json` in the tool folder (the
+   bar shows the exact path), replacing the existing file if there is
+   one. In Chrome and Edge, a save dialog lets you choose the location
+   directly. Other browsers save the file to your Downloads folder, so
+   move it to the tool folder yourself.
+4. Run the tool again. Suppressed findings are gone from the console
+   output, the report's main table, the summary counts and the exit
+   code.
+
+The report lists them in a collapsed **suppressed finding(s)** section,
+each with your reason. Untick one there (or untick a rule in **Suppress
+whole rules**) and save again to undo a suppression. Unsaved changes are
+counted in the save bar, and the browser warns you before you close the
+page with unsaved changes.
+
+**What a suppression matches.** A suppressed finding stays suppressed as
+long as the infobox fields it is about keep their current values. If
+someone edits one of them (e.g. corrects the `sterbedatum`), the finding
+comes back, so you can check whether it's still a false positive. Each
+entry is one of three kinds:
+
+| Entry contains | Suppresses |
+|---|---|
+| `rule_id` only | the whole rule, in every article. Such a rule is not even run, like with `--disable-rule` |
+| `rule_id` + `article` | that rule in that one article, whatever the field values |
+| `rule_id` + `article` + `fingerprint` | one specific finding, while its fields are unchanged (what the report's checkboxes create) |
+
+`suppressions.json` is a plain text file you can also write or edit
+yourself, e.g. to suppress a finding in a local draft checked with
+`--check` (its "article" is the file name):
+
+```json
+{
+  "version": 1,
+  "suppressions": [
+    {"rule_id": "missing_birthplace", "reason": "Not relevant for our project", "created": "2026-11-04"},
+    {"rule_id": "update_outdated", "article": "my_draft.wikitext"},
+    {"rule_id": "medal_count_mismatch", "article": "Usain Bolt", "fingerprint": "3f9a0c1b2d4e",
+     "message": "Olympische Spiele: 8 individual medals listed, but the summary declares 9.",
+     "reason": "Disqualification, see talk page", "created": "2026-11-04"}
+  ]
+}
+```
+
+Only `rule_id`, `article` and `fingerprint` are used for matching.
+`message` (what the finding said when it was suppressed), `reason` and
+`created` are just for you. If the file can't be read (e.g. a missing
+comma after hand-editing, or an unknown rule ID), the run stops with
+exit code 2 and a message naming the problem, rather than silently
+showing every suppressed finding again.
+
+**Seeing suppressed findings anyway.** Add `--include-suppressed`:
+
+```sh
+python main.py --check "Usain Bolt" --include-suppressed
+python main.py --scan --include-suppressed
+```
+
+With `--check`, suppressed findings are listed after the others, marked
+`(Suppressed: <reason>)`. In the report, they appear greyed out in the
+main table, already ticked, so they can be unsuppressed right there.
+Either way they still don't count towards the totals or the exit code.
+Without the flag, the console says how many suppressed findings were
+hidden, and rules suppressed as a whole are named in the
+`Filter active: ...` line.
 
 ### Running Several Scans at Once
 
@@ -467,17 +555,21 @@ python -m pytest
 
 The suite (`tests/test_parse.py`, `tests/test_rules.py`,
 `tests/test_main.py`, `tests/test_report.py`, `tests/test_fetch.py`,
-`tests/test_throttle.py`) uses real Infobox Leichtathlet snapshots
+`tests/test_throttle.py`, `tests/test_suppress.py`) uses real Infobox Leichtathlet snapshots
 captured from live articles (`tests/fixtures/`) as well as
 hand-crafted edge cases, but does not make any network calls itself
 (all `fetch.py` calls are mocked). It's basic coverage -- organized so
 every infobox field is exercised by at least one test rather than
 every individual rule, and so every CLI flag (`--scan`, `--check`,
 `--limit`, `--output`, `--no-cache`, `--overwrite-cache`, `--open`,
-`--fail-on`, `--disable-rule`) is exercised at least once -- rather than
-an exhaustive suite. A test also guards that every rule ID the rules can
-emit is listed in `rules.RULE_TITLES`, since `--disable-rule` only
-accepts IDs from there. The `--fail-on` and `--disable-rule` exit codes
+`--fail-on`, `--disable-rule`, `--include-suppressed`) is exercised at
+least once -- rather than an exhaustive suite. A test also guards that
+every rule ID the rules can emit is listed in `rules.RULE_TITLES`, since
+`--disable-rule` only accepts IDs from there, and in
+`rules.CHECK_RULE_IDS`, which decides which checks a disabled or
+suppressed rule lets the tool skip. Every test runs in its own
+throwaway working directory, so a real `suppressions.json` never
+affects the results. The `--fail-on` and `--disable-rule` exit codes
 are additionally checked end-to-end by
 running the CLI in a subprocess against a local draft file, which needs
 no network access either, and the shared request pacing is checked by
@@ -532,6 +624,16 @@ request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
   are under heavy load. Nothing is wrong on your side; wait a few
   minutes and run the same command again (already fetched articles are
   kept in `cache.json`).
+* **`The suppressions file '...' is invalid: ...`** — `suppressions.json`
+  was edited by hand and has a mistake, e.g. a missing comma or quote,
+  or a misspelled rule ID. The message names the problem (and, for an
+  entry, its number). Fix it in a text editor, or delete the file to
+  start over (this brings back every suppressed finding). See
+  [Suppressing False Positives](#suppressing-false-positives).
+* **A suppressed finding came back** — someone edited one of the
+  infobox fields the finding is about, so the suppression no longer
+  applies (see [Suppressing False Positives](#suppressing-false-positives)).
+  Check whether it's still a false positive, and suppress it again if so.
 * **Something else / a rule looks wrong** — please
   [open an issue](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues)
   with the command you ran and the full error message or article title.
@@ -552,7 +654,11 @@ request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
 * `parse.py` -- extracts the infobox parameters from the wikitext
   (`mwparserfromhell`) and parses (possibly incomplete) date values
 * `rules.py` -- the rule set
-* `report.py` -- generates the self-contained HTML report
+* `suppress.py` -- loads and matches the suppressions of known false
+  positives in `suppressions.json`, see
+  [Suppressing False Positives](#suppressing-false-positives)
+* `report.py` -- generates the self-contained HTML report, including
+  its controls for adding and removing suppressions
 * `templates/` -- HTML templates used by `report.py` (`string.Template`,
   `$placeholder` syntax)
 * `main.py` -- command-line entry point
