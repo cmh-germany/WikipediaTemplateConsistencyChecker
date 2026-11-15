@@ -179,6 +179,6 @@ genuinely doesn't apply.
 * `README.md` is the primary entry point for developers and users and should
   stay thorough: when you add a flag, rule, module, or limitation, update the
   corresponding README section (Usage, Severity Levels, Project Structure,
-  Known Limitations, Roadmap) in the same change, not as a follow-up.
+  Known Limitations) in the same change, not as a follow-up.
 * If a new rule was validated against live articles, follow the existing
   "Rule Validation" convention described in the README.
