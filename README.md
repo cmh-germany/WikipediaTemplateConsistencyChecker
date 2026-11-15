@@ -64,7 +64,6 @@
     <li><a href="#project-structure">Project Structure</a></li>
     <li><a href="#known-limitations">Known Limitations</a></li>
     <li><a href="#rule-validation">Rule Validation</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -85,8 +84,7 @@ that one template: parse a template's raw parameters out of the wikitext,
 run a set of independent consistency rules against them, and report
 whatever doesn't add up. The goal is to grow this into a tool that can be
 pointed at other Wikipedia infobox templates as well, each with its own
-rule set — see [Roadmap](#roadmap) for which templates and checks are
-planned next. Contributions defining rule sets for additional templates
+rule set. Contributions defining rule sets for additional templates
 are very welcome; see [Contributing](#contributing).
 
 Infobox Leichtathlet was the natural first target: it's embedded in
