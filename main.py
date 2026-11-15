@@ -10,8 +10,14 @@ Two modes:
       Checks a single article or a local wikitext file (e.g. a draft)
       and prints the findings directly to the console.
 
-Both modes accept --fail-on SEVERITY, --disable-rule RULE_ID[,...] and
---include-suppressed.
+Both modes accept --fail-on SEVERITY, --disable-rule RULE_ID[,...],
+--include-suppressed and --json [PATH].
+
+--json [PATH] additionally writes the results as machine-readable JSON
+(see json_report.py) to PATH, or to stdout if PATH is "-". Without a
+PATH it goes next to the HTML report (report.json) with --scan, and to
+stdout with --check. Whenever JSON goes to stdout, all other console
+output goes to stderr, so stdout carries exactly one JSON document.
 
 --fail-on SEVERITY (default: low, i.e. everything) hides findings
 below SEVERITY from the console and the report ("none" hides nothing
@@ -23,13 +29,17 @@ invalid.
 """
 
 import argparse
+import contextlib
 import difflib
 import os
 import re
 import sys
 import webbrowser
+from pathlib import Path
+from typing import Any
 
 import fetch
+import json_report
 import parse
 import report
 import rules
@@ -46,6 +56,12 @@ EXIT_ERROR = 2
 
 # Fail on any finding unless told otherwise (--fail-on none).
 DEFAULT_FAIL_ON: str | None = rules.LOW
+
+# --json PATH value meaning "standard output".
+JSON_STDOUT = "-"
+# What argparse stores for a bare --json (no PATH): a unique object, so
+# it can't be confused with any path the user actually typed.
+_JSON_DEFAULT: Any = object()
 
 
 def _extract_title_from_input(user_input):
@@ -134,6 +150,56 @@ def _check_output_path(path):
     if not os.access(directory, os.W_OK):
         return f"no write permission for directory '{directory}'"
     return None
+
+
+def _json_destination(value: Any, *, scan: bool, output: str) -> str | None:
+    """Resolves --json to a file path or JSON_STDOUT (None if --json
+    wasn't given). A bare --json puts the JSON next to the HTML report
+    with --scan (report.html -> report.json); --check has no report
+    file, so it prints the JSON instead, like its other output."""
+    if value is None:
+        return None
+    if value is _JSON_DEFAULT:
+        return str(Path(output).with_suffix(".json")) if scan else JSON_STDOUT
+    return value
+
+
+def _check_json_path(path: str, *, scan: bool, output: str) -> str | None:
+    """Pre-flight check for a --json file path, like _check_output_path
+    for --output, plus a guard against overwriting the HTML report (e.g.
+    `--output results.json --json` would otherwise resolve both to the
+    same file). Returns an error string, or None if the path looks OK."""
+    if not path.strip():
+        return (
+            "the path must not be empty -- give a file name, or '-' to "
+            "print the JSON to the console"
+        )
+    if scan and Path(path).resolve() == Path(output).resolve():
+        return (
+            f"'{path}' is also the HTML report's path (--output) -- give a "
+            "different file name for the JSON"
+        )
+    return _check_output_path(path)
+
+
+def _write_json(
+    json_output: json_report.JsonOutput,
+    results: dict[str, list[rules.Finding]],
+    view: report.SuppressionView,
+    run_info: json_report.RunInfo,
+) -> bool:
+    """Builds and writes the --json document. Returns False (after
+    saying why) if the file couldn't be written, so the caller can end
+    the run with EXIT_ERROR like a failed HTML report write."""
+    document = json_report.build_document(results, view, run_info)
+    try:
+        json_output.write(document)
+    except OSError as e:
+        print(
+            f"\nCould not write JSON to {json_output.description}: {e.strerror or e}."
+        )
+        return False
+    return True
 
 
 def _cache_status_note(use_cache: bool) -> str:
@@ -290,15 +356,19 @@ def _print_suppressed(
 
 
 def run_check(
-    target, session=None, finding_filter: rules.FindingFilter | None = None
+    target,
+    session=None,
+    finding_filter: rules.FindingFilter | None = None,
+    json_output: json_report.JsonOutput | None = None,
 ) -> int:
     """Checks a single article (title/URL) or local wikitext file and
     prints the findings `finding_filter` keeps (default: all) to the
-    console, minus suppressed ones (see suppress.py). Returns a process
-    exit code: EXIT_ERROR if the suppressions file is broken or the
-    target/template couldn't be resolved, else EXIT_FINDINGS if the
-    filter's `fail_on` is set and a kept, unsuppressed finding reaches
-    that severity, else EXIT_OK."""
+    console, minus suppressed ones (see suppress.py), and also writes
+    them as JSON to `json_output` if given. Returns a process exit
+    code: EXIT_ERROR if the suppressions file is broken, the
+    target/template couldn't be resolved or the JSON couldn't be
+    written, else EXIT_FINDINGS if the filter's `fail_on` is set and a
+    kept, unsuppressed finding reaches that severity, else EXIT_OK."""
     session = session or fetch.get_session()
     finding_filter = finding_filter or rules.FindingFilter()
     store = _load_suppressions()
@@ -326,8 +396,10 @@ def run_check(
             return EXIT_ERROR
         title = os.path.basename(target)
         categories = []
+        source = "local_file"
     else:
         title = _extract_title_from_input(target)
+        source = "wikipedia"
         data = fetch.fetch_pages_content_and_categories(session, [title])
         if title not in data:
             print(
@@ -372,6 +444,23 @@ def run_check(
     findings, suppressed = store.partition(title, findings, params)
     _print_findings(title, findings)
     _print_suppressed(suppressed, finding_filter.include_suppressed)
+
+    if json_output is not None:
+        view = report.SuppressionView(
+            store=store, include_suppressed=finding_filter.include_suppressed
+        )
+        view.add_article(title, params, findings, suppressed)
+        run_info = json_report.RunInfo(
+            mode="check",
+            tool_version=__version__,
+            target=target,
+            source=source,
+            finding_filter=finding_filter,
+            suppressed_rules=store.suppressed_rules,
+        )
+        if not _write_json(json_output, {title: findings}, view, run_info):
+            return EXIT_ERROR
+
     return _findings_exit_code(
         rules.count_by_severity(findings), finding_filter.fail_on
     )
@@ -420,13 +509,15 @@ def run_scan(
     open_output=False,
     overwrite_cache=False,
     finding_filter: rules.FindingFilter | None = None,
+    json_output: json_report.JsonOutput | None = None,
 ) -> int:
     """Fetches all articles embedding the template, runs the rule checks
     across the whole corpus, and writes the HTML report with the
     findings `finding_filter` keeps (default: all); suppressed findings
-    (see suppress.py) go to a separate report section. Returns a process
+    (see suppress.py) go to a separate report section. The same results
+    are also written as JSON to `json_output` if given. Returns a process
     exit code: EXIT_ERROR if the suppressions file is broken or the
-    report couldn't be written, else EXIT_FINDINGS if the filter's
+    report or JSON couldn't be written, else EXIT_FINDINGS if the filter's
     `fail_on` is set and a kept, unsuppressed finding reaches that
     severity, else EXIT_OK. Findings are checked only after the report
     is written and opened, so a failing CI run still leaves the report
@@ -513,6 +604,18 @@ def run_scan(
     except OSError as e:
         print(f"\nCould not write report to '{output}': {e.strerror or e}.")
         return EXIT_ERROR
+
+    if json_output is not None:
+        print(f"Writing JSON to {json_output.description} ...")
+        run_info = json_report.RunInfo(
+            mode="scan",
+            tool_version=__version__,
+            limit=limit,
+            finding_filter=finding_filter,
+            suppressed_rules=store.suppressed_rules,
+        )
+        if not _write_json(json_output, results, suppression_view, run_info):
+            return EXIT_ERROR
 
     n_with_findings = sum(1 for f in results.values() if f)
     all_findings = [finding for findings in results.values() for finding in findings]
@@ -626,6 +729,18 @@ def main():
         "suppressed and with your reason. They still never cause exit "
         "code 1",
     )
+    parser.add_argument(
+        "--json",
+        nargs="?",
+        const=_JSON_DEFAULT,
+        default=None,
+        metavar="PATH",
+        help="Also save the results as machine-readable JSON, for scripts "
+        "and CI (e.g. GitHub Actions). Give a file name, or '-' to print "
+        "the JSON to the console instead (all other messages then go to "
+        "stderr). Without a file name, --scan saves it next to the HTML "
+        "report (e.g. report.json) and --check prints it",
+    )
     args = parser.parse_args()
     finding_filter = rules.FindingFilter(
         disabled_rules=frozenset(
@@ -642,21 +757,40 @@ def main():
     if args.check is not None and not args.check.strip():
         parser.error("--check TARGET must not be empty")
 
-    if args.check:
-        return run_check(args.check, finding_filter=finding_filter)
-
-    output_error = _check_output_path(args.output)
-    if output_error:
+    scan = not args.check
+    if scan and (output_error := _check_output_path(args.output)):
         parser.error(f"--output: {output_error}")
 
-    return run_scan(
-        limit=args.limit,
-        output=args.output,
-        use_cache=not args.no_cache,
-        open_output=args.open,
-        overwrite_cache=args.overwrite_cache,
-        finding_filter=finding_filter,
+    json_output = None
+    json_path = _json_destination(args.json, scan=scan, output=args.output)
+    if json_path == JSON_STDOUT:
+        json_output = json_report.JsonOutput(stream=sys.stdout)
+    elif json_path is not None:
+        if json_error := _check_json_path(json_path, scan=scan, output=args.output):
+            parser.error(f"--json: {json_error}")
+        json_output = json_report.JsonOutput(path=Path(json_path))
+
+    # With the JSON on stdout, everything else goes to stderr, so a
+    # script reading stdout gets exactly one JSON document.
+    console = (
+        contextlib.redirect_stdout(sys.stderr)
+        if json_output is not None and json_output.stream is not None
+        else contextlib.nullcontext()
     )
+    with console:
+        if args.check:
+            return run_check(
+                args.check, finding_filter=finding_filter, json_output=json_output
+            )
+        return run_scan(
+            limit=args.limit,
+            output=args.output,
+            use_cache=not args.no_cache,
+            open_output=args.open,
+            overwrite_cache=args.overwrite_cache,
+            finding_filter=finding_filter,
+            json_output=json_output,
+        )
 
 
 if __name__ == "__main__":

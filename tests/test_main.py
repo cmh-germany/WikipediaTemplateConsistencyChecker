@@ -423,6 +423,7 @@ def test_scan_invokes_run_scan_with_defaults(monkeypatch):
         "open_output": False,
         "overwrite_cache": False,
         "finding_filter": main.rules.FindingFilter(),
+        "json_output": None,
     }
 
 
@@ -451,6 +452,7 @@ def test_scan_passes_through_limit_output_no_cache_and_open(monkeypatch):
         "open_output": True,
         "overwrite_cache": False,
         "finding_filter": main.rules.FindingFilter(),
+        "json_output": None,
     }
 
 
