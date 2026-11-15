@@ -52,6 +52,7 @@
       <a href="#usage">Usage</a>
       <ul>
         <li><a href="#exit-codes-ci-usage">Exit Codes (CI Usage)</a></li>
+        <li><a href="#machine-readable-json-output">Machine-Readable JSON Output</a></li>
         <li><a href="#hiding-rules-or-low-severity-findings">Hiding Rules or Low-Severity Findings</a></li>
         <li><a href="#suppressing-false-positives">Suppressing False Positives</a></li>
         <li><a href="#running-several-scans-at-once">Running Several Scans at Once</a></li>
@@ -101,7 +102,8 @@ For this template, the tool parses its raw parameters out of the wikitext
 and runs a set of independent consistency rules against them, either for
 a single article/draft or for every article that embeds the template.
 Results are either printed to the console or collected into a single,
-sortable, self-contained HTML report.
+sortable, self-contained HTML report, and can additionally be saved as
+[machine-readable JSON](#machine-readable-json-output) for scripts and CI.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -336,7 +338,7 @@ python main.py --scan --fail-on none                      # show everything, nev
 |---|---|
 | `0` | Run completed; no finding is left after `--fail-on`, `--disable-rule` and [suppressions](#suppressing-false-positives) (by default: no findings at all) |
 | `1` | Run completed, and at least one finding reached the `--fail-on` severity (findings of [disabled rules](#hiding-rules-or-low-severity-findings) and [suppressed findings](#suppressing-false-positives) never count, even with `--include-suppressed`) |
-| `2` | The run failed (article/infobox not found, draft file unreadable, report couldn't be written, `suppressions.json` invalid) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity or `--disable-rule` rule ID) |
+| `2` | The run failed (article/infobox not found, draft file unreadable, report or [JSON file](#machine-readable-json-output) couldn't be written, `suppressions.json` invalid) or the command-line arguments were invalid (e.g. an unknown `--fail-on` severity or `--disable-rule` rule ID) |
 
 If you're not using the tool in an automated setup, you can ignore the
 exit code entirely — a `1` does **not** mean the tool crashed. The
@@ -351,6 +353,92 @@ so the reason is visible in a CI log. Example GitHub Actions step:
 - name: Check infobox draft
   run: python main.py --check drafts/athlete.wikitext --fail-on high
 ```
+
+### Machine-Readable JSON Output
+
+For scripts, CI jobs and GitHub Actions that need to act on individual
+findings rather than just the exit code, `--json` saves the results as
+a JSON document as well, so nothing has to be scraped from the console
+output or the HTML report. It works in both modes:
+
+```sh
+python main.py --scan --json                       # report.html + report.json next to it
+python main.py --scan --output athletes.html --json   # athletes.html + athletes.json
+python main.py --scan --json results/scan.json     # any other file name
+python main.py --check my_draft.wikitext --json    # prints the JSON instead of saving it
+python main.py --check "Usain Bolt" --json -       # "-" always means: print the JSON
+```
+
+Without a file name, `--scan` saves the JSON next to the HTML report
+(same name, `.json` instead of `.html`), and `--check`, which has no
+report file, prints it. `-` prints it in either mode. Whenever the JSON
+is printed, every other message (progress, findings, the
+`Exiting with code 1` explanation) goes to stderr instead, so the
+output can be piped straight into another program. The exit code is the
+same as without `--json`:
+
+```sh
+python main.py --check my_draft.wikitext --json | python -c "import json, sys; print(json.load(sys.stdin)['summary'])"
+```
+
+```yaml
+- name: Check infobox draft
+  run: python main.py --check drafts/athlete.wikitext --json findings.json
+- name: Keep the findings
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: infobox-findings
+    path: findings.json
+```
+
+A saved file is written to a temporary file first and then moved into
+place, so a script never sees a half-written file. It's UTF-8, while
+printed JSON escapes non-ASCII characters (e.g. `Ž` for `Ž`), since
+some Windows consoles can't display them; both decode to the same data.
+
+The document contains:
+
+| Field | Content |
+|---|---|
+| `format_version` | Version of this layout, currently `1` (see below) |
+| `generator` | `name` and `version` of this tool (as shown by `--version`) |
+| `generated_at` | When the run finished, in UTC (ISO 8601) |
+| `template` | `name` and documentation `url` of the checked template |
+| `run` | How the tool was run: `mode` (`scan`/`check`), `target` (the `--check` value), `source` (`wikipedia`, or `local_file` for a draft), `limit`, `fail_on`, `disabled_rules`, `suppressed_rules` (rules suppressed as a whole), `include_suppressed` |
+| `summary` | `articles_checked`, `articles_with_findings`, `findings` (total), `by_severity` (all four [severities](#severity-levels), including zeros) and `suppressed_findings`; the same numbers as the console summary |
+| `articles` | Every checked article, also those without findings: `title`, `url`, `findings` (count) |
+| `findings` | The findings, most severe first (see below) |
+| `suppressed_findings` | [Suppressed findings](#suppressing-false-positives), in the same format. Always listed, with or without `--include-suppressed`, but never counted in `summary` |
+
+Each finding has:
+
+| Field | Content |
+|---|---|
+| `id` | Short identifier, unique within the document, and the same in a later run as long as the finding doesn't change |
+| `rule_id`, `rule_title` | The [rule](#severity-levels) that fired |
+| `severity` | `very high`, `high`, `medium` or `low` |
+| `message` | What's wrong, as in the console and report |
+| `note` | Extra context (the report's Note column), or `null` |
+| `article`, `article_url` | Where the finding is (for a local draft: its file name, and `article_url` is `null`) |
+| `params` | The infobox field(s) the finding is about |
+| `fingerprint` | The value `suppressions.json` uses to [suppress exactly this finding](#suppressing-false-positives) while its fields are unchanged |
+| `suppression` | `null`, or (in `suppressed_findings`) `reason` and `scope` (`finding`, `article` or `rule`) of the matching suppression |
+
+`--fail-on` and `--disable-rule` apply to the JSON just like to the
+console and the report: hidden findings aren't in it, and `run` records
+the filter so a filtered document isn't mistaken for a complete one.
+
+**Versioning.** `format_version` only changes when an existing field is
+renamed, removed or changes its meaning, so a script that checks it can
+safely ignore fields it doesn't know about: new fields may be added
+without a version change. Not included yet: a suggested fix per finding
+(planned for a later version) and the Git commit the
+tool was run from (the tool is often run from a ZIP download, so
+`generator.version` identifies the version instead). There are
+deliberately no separate `--json-stdout` or `--json-pretty` flags:
+`--json -` prints the JSON, and it's always indented for readability
+(JSON tools don't care either way).
 
 ### Hiding Rules or Low-Severity Findings
 
@@ -554,16 +642,19 @@ python -m pytest
 ```
 
 The suite (`tests/test_parse.py`, `tests/test_rules.py`,
-`tests/test_main.py`, `tests/test_report.py`, `tests/test_fetch.py`,
-`tests/test_throttle.py`, `tests/test_suppress.py`) uses real Infobox Leichtathlet snapshots
+`tests/test_main.py`, `tests/test_report.py`, `tests/test_json_report.py`,
+`tests/test_fetch.py`, `tests/test_throttle.py`, `tests/test_suppress.py`) uses real Infobox Leichtathlet snapshots
 captured from live articles (`tests/fixtures/`) as well as
 hand-crafted edge cases, but does not make any network calls itself
 (all `fetch.py` calls are mocked). It's basic coverage -- organized so
 every infobox field is exercised by at least one test rather than
 every individual rule, and so every CLI flag (`--scan`, `--check`,
 `--limit`, `--output`, `--no-cache`, `--overwrite-cache`, `--open`,
-`--fail-on`, `--disable-rule`, `--include-suppressed`) is exercised at
-least once -- rather than an exhaustive suite. A test also guards that
+`--fail-on`, `--disable-rule`, `--include-suppressed`, `--json`) is
+exercised at least once -- rather than an exhaustive suite. The JSON
+document's complete layout is pinned by a snapshot
+(`tests/fixtures/json_report_snapshot.json`), so an accidental change to
+it fails a test. A test also guards that
 every rule ID the rules can emit is listed in `rules.RULE_TITLES`, since
 `--disable-rule` only accepts IDs from there, and in
 `rules.CHECK_RULE_IDS`, which decides which checks a disabled or
@@ -571,7 +662,8 @@ suppressed rule lets the tool skip. Every test runs in its own
 throwaway working directory, so a real `suppressions.json` never
 affects the results. The `--fail-on` and `--disable-rule` exit codes
 are additionally checked end-to-end by
-running the CLI in a subprocess against a local draft file, which needs
+running the CLI in a subprocess against a local draft file (as is
+`--json -` producing exactly one JSON document on stdout), which needs
 no network access either, and the shared request pacing is checked by
 running several worker processes against one coordination file (using a
 throwaway file, never the real one in the temp folder).
@@ -659,6 +751,9 @@ request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
   [Suppressing False Positives](#suppressing-false-positives)
 * `report.py` -- generates the self-contained HTML report, including
   its controls for adding and removing suppressions
+* `json_report.py` -- builds and writes the machine-readable JSON
+  output (`--json`), see
+  [Machine-Readable JSON Output](#machine-readable-json-output)
 * `templates/` -- HTML templates used by `report.py` (`string.Template`,
   `$placeholder` syntax)
 * `main.py` -- command-line entry point
