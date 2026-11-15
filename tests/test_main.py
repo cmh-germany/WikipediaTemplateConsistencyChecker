@@ -1,6 +1,6 @@
 """Tests for main.py's command-line interface: argument parsing/
 dispatch (--scan vs. --check, --limit, --output, --no-cache, --open,
---fail-on), the --check target-resolution logic (article title, article
+--fail-on, --json), the --check target-resolution logic (article title, article
 URL, local wikitext file), and the exit codes --fail-on produces
 (including via a real subprocess). run_scan's internals (the actual scan loop) are
 out of scope here -- these tests are about the CLI surface, not the
@@ -1662,3 +1662,278 @@ def test_cli_check_suppressed_findings_exit_0(tmp_path):
     result = _run_cli("--check", str(path))
     assert result.returncode == 0, result.stdout + result.stderr
     assert "not running rule(s) missing_birthplace" in result.stdout
+
+
+# ---------------------------------------------------------------------
+# --json: machine-readable output (issue #16)
+# ---------------------------------------------------------------------
+
+
+def _json_output_passed(monkeypatch, *args: str) -> Any:
+    """Runs main() with `args` (run_scan/run_check stubbed out) and
+    returns the json_output it handed to them."""
+    calls: list[dict] = []
+    stub = _recording_stub(calls)
+    monkeypatch.setattr(sys, "argv", ["main.py", *args])
+    monkeypatch.setattr(main, "run_scan", stub)
+    monkeypatch.setattr(main, "run_check", lambda target, **kw: stub(**kw))
+    main.main()
+    return calls[0]["json_output"]
+
+
+def test_no_json_flag_passes_no_json_output(monkeypatch):
+    assert _json_output_passed(monkeypatch, "--scan") is None
+    assert _json_output_passed(monkeypatch, "--check", "Usain Bolt") is None
+
+
+def test_bare_json_with_scan_writes_next_to_report(monkeypatch):
+    json_output = _json_output_passed(monkeypatch, "--scan", "--json")
+    assert json_output.path == Path("report.json")
+    assert json_output.stream is None
+
+
+def test_bare_json_follows_custom_output_name(monkeypatch):
+    json_output = _json_output_passed(
+        monkeypatch, "--scan", "--output", "athletes.html", "--json"
+    )
+    assert json_output.path == Path("athletes.json")
+
+
+@pytest.mark.parametrize("mode", [["--scan"], ["--check", "Usain Bolt"]])
+def test_json_with_explicit_path(monkeypatch, mode):
+    json_output = _json_output_passed(monkeypatch, *mode, "--json", "out.json")
+    assert json_output.path == Path("out.json")
+    assert json_output.stream is None
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--check", "Usain Bolt", "--json"],
+        ["--check", "Usain Bolt", "--json", "-"],
+        ["--scan", "--json", "-"],
+    ],
+)
+def test_json_to_stdout(monkeypatch, args):
+    json_output = _json_output_passed(monkeypatch, *args)
+    assert json_output.path is None
+    assert json_output.stream is not None
+
+
+def test_json_to_stdout_moves_console_output_to_stderr(monkeypatch, capsys):
+    def fake_check(target, **kw):
+        print("Checking ...")
+        kw["json_output"].write({"ok": True})
+        return main.EXIT_OK
+
+    monkeypatch.setattr(sys, "argv", ["main.py", "--check", "X", "--json", "-"])
+    monkeypatch.setattr(main, "run_check", fake_check)
+
+    main.main()
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"ok": True}
+    assert "Checking ..." in captured.err
+
+
+def test_json_file_keeps_console_output_on_stdout(monkeypatch, capsys):
+    def fake_check(target, **kw):
+        print("Checking ...")
+        return main.EXIT_OK
+
+    monkeypatch.setattr(sys, "argv", ["main.py", "--check", "X", "--json", "o.json"])
+    monkeypatch.setattr(main, "run_check", fake_check)
+
+    main.main()
+
+    assert "Checking ..." in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--scan", "--output", "r.json", "--json"], "also the HTML report's path"),
+        (["--scan", "--json", "report.html"], "also the HTML report's path"),
+        (["--check", "X", "--json", " "], "must not be empty"),
+        (["--scan", "--json", "missing_dir/out.json"], "does not exist"),
+        (["--check", "X", "--json", "."], "is a directory"),
+    ],
+)
+def test_json_rejects_bad_paths_before_running(monkeypatch, capsys, args, message):
+    calls: list[dict] = []
+    monkeypatch.setattr(sys, "argv", ["main.py", *args])
+    stub = _recording_stub(calls)
+    monkeypatch.setattr(main, "run_scan", stub)
+    monkeypatch.setattr(main, "run_check", lambda target, **kw: stub(**kw))
+
+    with pytest.raises(SystemExit) as exc_info:
+        main.main()
+
+    assert exc_info.value.code == main.EXIT_ERROR
+    err = capsys.readouterr().err
+    assert "--json:" in err
+    assert message in err
+    assert calls == []
+
+
+def _json_file(tmp_path) -> tuple[Path, Any]:
+    path = tmp_path / "out.json"
+    return path, main.json_report.JsonOutput(path=path)
+
+
+def test_run_check_writes_json_file(tmp_path):
+    path, json_output = _json_file(tmp_path)
+    draft = _high_and_low_draft(tmp_path)
+
+    result = main.run_check(draft, json_output=json_output)
+
+    assert result == main.EXIT_FINDINGS  # exit code unaffected by --json
+    document = json.loads(path.read_text(encoding="utf-8"))
+    assert document["generator"]["version"] == main.__version__
+    assert document["run"]["mode"] == "check"
+    assert document["run"]["target"] == draft
+    assert document["run"]["source"] == "local_file"
+    assert [f["rule_id"] for f in document["findings"]] == [
+        "death_date_with_non_deceased_status",
+        "missing_birthplace",
+    ]
+    assert document["findings"][0]["article"] == "draft.wikitext"
+    assert document["findings"][0]["article_url"] is None
+    assert document["summary"]["articles_checked"] == 1
+
+
+def test_run_check_json_links_wikipedia_article(monkeypatch, tmp_path):
+    monkeypatch.setattr(main.fetch, "get_session", lambda: object())
+    monkeypatch.setattr(
+        main.fetch,
+        "fetch_pages_content_and_categories",
+        lambda session, titles: {
+            "Dead Athlete": {"wikitext": _HIGH_AND_LOW_WIKITEXT, "categories": []}
+        },
+    )
+    path, json_output = _json_file(tmp_path)
+
+    main.run_check("Dead Athlete", json_output=json_output)
+
+    document = json.loads(path.read_text(encoding="utf-8"))
+    assert document["run"]["source"] == "wikipedia"
+    assert document["findings"][0]["article_url"] == (
+        "https://de.wikipedia.org/wiki/Dead_Athlete"
+    )
+
+
+def test_run_check_json_respects_fail_on_and_lists_suppressed(tmp_path):
+    _write_suppressions(
+        {
+            "rule_id": "death_date_with_non_deceased_status",
+            "article": "draft.wikitext",
+            "reason": "checked by hand",
+        }
+    )
+    path, json_output = _json_file(tmp_path)
+    finding_filter = main.rules.FindingFilter(fail_on=main.rules.HIGH)
+
+    result = main.run_check(
+        _high_and_low_draft(tmp_path),
+        finding_filter=finding_filter,
+        json_output=json_output,
+    )
+
+    assert result == main.EXIT_OK
+    document = json.loads(path.read_text(encoding="utf-8"))
+    assert document["run"]["fail_on"] == "high"
+    assert document["findings"] == []  # the low finding is filtered out
+    [suppressed] = document["suppressed_findings"]
+    assert suppressed["rule_id"] == "death_date_with_non_deceased_status"
+    assert suppressed["suppression"] == {
+        "reason": "checked by hand",
+        "scope": "article",
+    }
+
+
+def test_run_check_json_write_failure_returns_2(tmp_path, capsys):
+    json_output = main.json_report.JsonOutput(path=tmp_path / "missing" / "out.json")
+
+    result = main.run_check(_high_and_low_draft(tmp_path), json_output=json_output)
+
+    assert result == main.EXIT_ERROR
+    assert "Could not write JSON to" in capsys.readouterr().out
+
+
+def test_run_scan_writes_json_file(monkeypatch, capsys, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    _write_suppressions(
+        {"rule_id": "missing_birthplace", "article": "Dead Athlete", "reason": "r"}
+    )
+    path, json_output = _json_file(tmp_path)
+
+    result = main.run_scan(
+        limit=5, output=str(tmp_path / "report.html"), json_output=json_output
+    )
+
+    assert result == main.EXIT_FINDINGS
+    assert f"Writing JSON to '{path.resolve()}' ..." in capsys.readouterr().out
+    document = json.loads(path.read_text(encoding="utf-8"))
+    assert document["run"]["mode"] == "scan"
+    assert document["run"]["limit"] == 5
+    assert document["articles"] == [
+        {
+            "title": "Dead Athlete",
+            "url": "https://de.wikipedia.org/wiki/Dead_Athlete",
+            "findings": 1,
+        }
+    ]
+    assert document["summary"]["findings"] == 1
+    assert document["summary"]["suppressed_findings"] == 1
+    assert document["suppressed_findings"][0]["suppression"]["reason"] == "r"
+
+
+def test_run_scan_json_write_failure_returns_2_but_keeps_report(
+    monkeypatch, capsys, tmp_path
+):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    json_output = main.json_report.JsonOutput(path=tmp_path / "missing" / "out.json")
+
+    result = main.run_scan(
+        output=str(tmp_path / "report.html"), json_output=json_output
+    )
+
+    assert result == main.EXIT_ERROR
+    assert (tmp_path / "report.html").exists()
+    assert "Could not write JSON to" in capsys.readouterr().out
+
+
+def test_run_scan_without_json_writes_no_json_file(monkeypatch, tmp_path):
+    _stub_scan_with_high_and_low_findings(monkeypatch)
+    main.run_scan(output=str(tmp_path / "report.html"))
+    assert list(tmp_path.glob("*.json")) == []
+
+
+@pytest.mark.parametrize("json_args", [["--json", "-"], ["--json"]])
+def test_cli_check_json_to_stdout_is_one_json_document(tmp_path, json_args):
+    result = _run_cli("--check", _high_and_low_draft(tmp_path), *json_args)
+
+    assert result.returncode == main.EXIT_FINDINGS, result.stderr
+    document = json.loads(result.stdout)
+    assert document["format_version"] == main.json_report.FORMAT_VERSION
+    assert {
+        "generator",
+        "generated_at",
+        "template",
+        "run",
+        "summary",
+        "articles",
+        "findings",
+        "suppressed_findings",
+    } <= document.keys()
+    assert document["summary"]["findings"] == 2
+    assert "Checking '" in result.stderr
+    assert "Exiting with code 1" in result.stderr
+
+
+def test_cli_check_json_file(tmp_path):
+    path = tmp_path / "out.json"
+    result = _run_cli("--check", _high_and_low_draft(tmp_path), "--json", str(path))
+    assert result.returncode == main.EXIT_FINDINGS, result.stderr
+    assert "Checking '" in result.stdout
+    assert json.loads(path.read_text(encoding="utf-8"))["summary"]["findings"] == 2
