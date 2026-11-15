@@ -1,0 +1,118 @@
+{
+  "format_version": 1,
+  "generator": {
+    "name": "WikipediaTemplateConsistencyChecker",
+    "version": "9.9"
+  },
+  "generated_at": "2026-11-15T12:00:00+00:00",
+  "template": {
+    "name": "Vorlage:Infobox Leichtathlet",
+    "url": "https://de.wikipedia.org/wiki/Vorlage:Infobox_Leichtathlet"
+  },
+  "run": {
+    "mode": "scan",
+    "target": null,
+    "source": "wikipedia",
+    "limit": 50,
+    "fail_on": "low",
+    "disabled_rules": [],
+    "suppressed_rules": [],
+    "include_suppressed": false
+  },
+  "summary": {
+    "articles_checked": 3,
+    "articles_with_findings": 2,
+    "findings": 3,
+    "by_severity": {
+      "very high": 0,
+      "high": 1,
+      "medium": 1,
+      "low": 1
+    },
+    "suppressed_findings": 1
+  },
+  "articles": [
+    {
+      "title": "Clean Article",
+      "url": "https://de.wikipedia.org/wiki/Clean_Article",
+      "findings": 0
+    },
+    {
+      "title": "Jesse Owens",
+      "url": "https://de.wikipedia.org/wiki/Jesse_Owens",
+      "findings": 2
+    },
+    {
+      "title": "Usain Bolt",
+      "url": "https://de.wikipedia.org/wiki/Usain_Bolt",
+      "findings": 1
+    }
+  ],
+  "findings": [
+    {
+      "id": "bad8cb91df7d",
+      "rule_id": "medal_count_mismatch",
+      "rule_title": "Medal count mismatch",
+      "severity": "high",
+      "message": "Olympische Spiele: 4 medals listed, but the summary declares 3.",
+      "note": null,
+      "article": "Jesse Owens",
+      "article_url": "https://de.wikipedia.org/wiki/Jesse_Owens",
+      "params": [
+        "medaillen"
+      ],
+      "fingerprint": "32ccf7c2ce5d",
+      "suppression": null
+    },
+    {
+      "id": "a1816ec86cc4",
+      "rule_id": "height_comma_format",
+      "rule_title": "Height uses a comma instead of a plain number",
+      "severity": "medium",
+      "message": "Height '1,78' uses a comma.",
+      "note": "Renders as 1,78 m.",
+      "article": "Jesse Owens",
+      "article_url": "https://de.wikipedia.org/wiki/Jesse_Owens",
+      "params": [
+        "groesse"
+      ],
+      "fingerprint": "c80861fa1020",
+      "suppression": null
+    },
+    {
+      "id": "d080db7d8426",
+      "rule_id": "missing_birthplace",
+      "rule_title": "Missing birthplace",
+      "severity": "low",
+      "message": "No birthplace.",
+      "note": null,
+      "article": "Usain Bolt",
+      "article_url": "https://de.wikipedia.org/wiki/Usain_Bolt",
+      "params": [
+        "geburtsort"
+      ],
+      "fingerprint": "e0df7d07d8d7",
+      "suppression": null
+    }
+  ],
+  "suppressed_findings": [
+    {
+      "id": "d0991dc1a904",
+      "rule_id": "update_outdated",
+      "rule_title": "Outdated update despite active status",
+      "severity": "low",
+      "message": "Update is 5 years old.",
+      "note": null,
+      "article": "Jesse Owens",
+      "article_url": "https://de.wikipedia.org/wiki/Jesse_Owens",
+      "params": [
+        "update"
+      ],
+      "fingerprint": "2d24baf915bb",
+      "suppression": {
+        "reason": "Known",
+        "scope": "article"
+      }
+    }
+  ]
+}
