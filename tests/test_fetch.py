@@ -1,12 +1,12 @@
 """Tests for fetch.py: the local disk cache (load_cache/save_cache) --
 corruption recovery on load and atomic, non-interleaving writes on save
-(see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/7)
+(see https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/7)
 -- fetch_pages_content_and_categories's per-batch progress output
-(see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/9)
+(see https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/9)
 -- and cache age detection plus fetch_all_with_cache's overwrite_cache
-option (see https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/20)
+option (see https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/20)
 -- and request pacing plus maxlag handling (see
-https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/17)."""
+https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/17)."""
 
 import glob
 import json
@@ -74,7 +74,7 @@ def _fake_api_query_echoing_titles(session, params, stop_when=None):
 
 
 def test_fetch_pages_prints_progress_once_per_batch(monkeypatch, capsys):
-    """See https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/9:
+    """See https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/9:
     one "{done}/{total} articles fetched" line after each batch, not
     per article and not only at the end."""
     monkeypatch.setattr(fetch, "BATCH_SIZE", 2)
