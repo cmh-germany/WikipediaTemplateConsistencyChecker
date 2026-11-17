@@ -7,13 +7,19 @@ on:
 
 jobs:
   test:
-    # Pinned rather than ubuntu-latest so a runner image migration can't
-    # silently break the build; bump deliberately when needed.
-    runs-on: ubuntu-24.04
+    # Pinned rather than ubuntu-latest/windows-latest so a runner image
+    # migration can't silently break the build; bump deliberately when needed.
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        os: [ubuntu-24.04]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
+        include:
+          # Windows is where most non-developer editors install the tool, so
+          # catch installation problems there too (newest Python only).
+          - os: windows-2025
+            python-version: "3.15"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -21,7 +27,20 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: requirements*.txt
-      - run: python -m pip install -r requirements-dev.txt
+      - name: Install dependencies
+        if: runner.os != 'Windows'
+        run: python -m pip install -r requirements-dev.txt
+      # The Windows runner has a C compiler, unlike a typical editor's PC, so
+      # install exactly as the README's compiler-free workaround tells users
+      # to (mwparserfromhell has no prebuilt wheels for Python 3.14+).
+      - name: Install dependencies (pure-Python mwparserfromhell)
+        if: runner.os == 'Windows'
+        env:
+          WITH_EXTENSION: "0"
+        run: python -m pip install -r requirements-dev.txt
+      - name: Check that the pure-Python tokenizer is in use
+        if: runner.os == 'Windows'
+        run: python -c "import sys, mwparserfromhell; sys.exit(mwparserfromhell.parser.use_c)"
       - run: ruff format --check .
       - run: ruff check .
       - run: mypy .
