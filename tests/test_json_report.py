@@ -96,7 +96,7 @@ def test_document_has_version_and_generator():
     document = _document()
     assert document["format_version"] == json_report.FORMAT_VERSION
     assert document["generator"] == {
-        "name": "WikipediaTemplateConsistencyChecker",
+        "name": "WikipediaInfoboxConsistencyChecker",
         "version": "9.9",
     }
     assert document["generated_at"] == "2026-11-15T12:00:00+00:00"
