@@ -4,7 +4,7 @@ Guidance for Claude Code (and any other AI assistant) working in this repository
 
 ## Project Overview
 
-WikipediaTemplateConsistencyChecker finds consistency errors in German Wikipedia
+WikipediaInfoboxConsistencyChecker finds consistency errors in German Wikipedia
 article templates (currently only `Vorlage:Infobox Leichtathlet` template, e.g. a death date
 given despite an "active" status), either for a single article/draft or across
 all ~15,000 articles embedding the template. See [`README.md`](README.md) for
@@ -158,7 +158,7 @@ genuinely doesn't apply.
   changes from the `main` branch. Then create a new branch named after the
   issue (e.g. `20-cli-argument---overwrite-cache-flag-with-cache-age-detection`
   for
-  https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/20).
+  https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/20).
   All commits for that issue happen on this branch.
 * Commit in small, focused, logically-independent steps rather than one
   large commit per task — each commit should represent one coherent change

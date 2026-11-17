@@ -647,12 +647,15 @@ def main():
     """Parses CLI arguments and dispatches to run_check or run_scan.
     Returns a process exit code."""
     parser = argparse.ArgumentParser(
-        description="Consistency checker for Wikipedia Vorlage:Infobox templates",
+        description=(
+            "WikipediaInfoboxConsistencyChecker - Consistency checker for "
+            "Wikipedia Vorlage:Infobox templates"
+        ),
     )
     parser.add_argument(
         "--version",
         action="version",
-        version=f"WikipediaTemplateConsistencyChecker {__version__}",
+        version=f"WikipediaInfoboxConsistencyChecker {__version__}",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(

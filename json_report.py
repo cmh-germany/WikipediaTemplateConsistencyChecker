@@ -22,7 +22,7 @@ import suppress
 from rules import Finding
 
 FORMAT_VERSION = 1
-GENERATOR_NAME = "WikipediaTemplateConsistencyChecker"
+GENERATOR_NAME = "WikipediaInfoboxConsistencyChecker"
 TEMPLATE_NAME = "Vorlage:Infobox Leichtathlet"
 
 

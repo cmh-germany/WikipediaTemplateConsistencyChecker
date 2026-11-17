@@ -1,6 +1,6 @@
 """Tests for throttle.py: machine-wide pacing of API requests shared by
 every run of the tool (see
-https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/17).
+https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/17).
 conftest.py points throttle.LOCK_FILE at a per-test temp path."""
 
 import subprocess

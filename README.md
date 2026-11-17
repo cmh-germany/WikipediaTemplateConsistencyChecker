@@ -14,7 +14,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-<h3 align="center">WikipediaTemplateConsistencyChecker</h3>
+<h3 align="center">WikipediaInfoboxConsistencyChecker</h3>
 
   <p align="center">
     Finds consistency errors in Wikipedia articles that use Vorlage:Infobox template (such as the
@@ -22,9 +22,9 @@
      — e.g. a death date given despite an "active" status — and helps
     avoid such errors when drafting a new infobox.
     <br />
-    <a href="https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/new?labels=bug&title=%5BBug%5D%3A+">Report Bug</a>
+    <a href="https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/new?labels=bug&title=%5BBug%5D%3A+">Report Bug</a>
     &middot;
-    <a href="https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/new?labels=enhancement&title=%5BFeature%5D%3A+">Request Feature</a>
+    <a href="https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/new?labels=enhancement&title=%5BFeature%5D%3A+">Request Feature</a>
   </p>
 </div>
 
@@ -76,7 +76,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-**WikipediaTemplateConsistencyChecker is currently a technical proof of
+**WikipediaInfoboxConsistencyChecker is currently a technical proof of
 concept**, built and validated against a single template so far:
 German Wikipedia's [`Vorlage:Infobox Leichtathlet`](https://de.wikipedia.org/wiki/Vorlage:Infobox_Leichtathlet)
 (athlete infobox). The underlying approach, however, is not specific to
@@ -125,7 +125,7 @@ AI coding assistant, under the direction and review of the maintainer.
 AI-assisted rules were validated against a live sample of real Wikipedia
 articles before being added (see [Rule Validation](#rule-validation)), but
 the tool is not infallible — please review its findings before acting on
-them, and feel free to [open an issue](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues)
+them, and feel free to [open an issue](https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues)
 if a rule doesn't match how the template is actually used.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -172,12 +172,12 @@ public, unauthenticated German Wikipedia API.
 
 1. Get the code, either by cloning the repository with Git
    ```sh
-   git clone https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker.git
-   cd WikipediaTemplateConsistencyChecker
+   git clone https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker.git
+   cd WikipediaInfoboxConsistencyChecker
    ```
    or, if Git isn't installed, via the green "Code" → "Download ZIP"
    button on the
-   [GitHub project page](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker),
+   [GitHub project page](https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker),
    then extracting the ZIP and opening a terminal in the extracted
    folder.
 2. Install the Python dependencies
@@ -562,7 +562,7 @@ The tool is a guest on Wikipedia's servers and paces itself accordingly:
 it sends at most one API request every 0.5 seconds — and that limit is
 shared by **every run of the tool on the same computer**, not applied
 per run. Each run reserves its next request slot in a small coordination
-file in your system's temp folder (`WikipediaTemplateChecker-api.lock`),
+file in your system's temp folder (`WikipediaInfoboxConsistencyChecker-api.lock`),
 so if you start a second scan, or a `--check`, while another scan is
 still running, both keep working but each gets correspondingly slower,
 instead of together putting twice the load on Wikipedia. You don't need
@@ -725,7 +725,7 @@ request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
   applies (see [Suppressing False Positives](#suppressing-false-positives)).
   Check whether it's still a false positive, and suppress it again if so.
 * **Something else / a rule looks wrong** — please
-  [open an issue](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues)
+  [open an issue](https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues)
   with the command you ran and the full error message or article title.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -870,8 +870,8 @@ Don't forget to give the project a star! Thanks again!
 
 ### Top contributors:
 
-<a href="https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=cmh-germany/WikipediaTemplateConsistencyChecker" alt="contrib.rocks image" />
+<a href="https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=cmh-germany/WikipediaInfoboxConsistencyChecker" alt="contrib.rocks image" />
 </a>
 
 
@@ -888,7 +888,7 @@ Distributed under the GNU General Public License v3.0. See [`LICENSE`](LICENSE) 
 <!-- CONTACT -->
 ## Contact
 
-Project Link: [https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker](https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker)
+Project Link: [https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker](https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -908,16 +908,16 @@ Project Link: [https://github.com/cmh-germany/WikipediaTemplateConsistencyChecke
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[contributors-shield]: https://img.shields.io/github/contributors/cmh-germany/WikipediaTemplateConsistencyChecker.svg?style=for-the-badge
-[contributors-url]: https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/cmh-germany/WikipediaTemplateConsistencyChecker.svg?style=for-the-badge
-[forks-url]: https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/network/members
-[stars-shield]: https://img.shields.io/github/stars/cmh-germany/WikipediaTemplateConsistencyChecker.svg?style=for-the-badge
-[stars-url]: https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/stargazers
-[issues-shield]: https://img.shields.io/github/issues/cmh-germany/WikipediaTemplateConsistencyChecker.svg?style=for-the-badge
-[issues-url]: https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues
-[license-shield]: https://img.shields.io/github/license/cmh-germany/WikipediaTemplateConsistencyChecker.svg?style=for-the-badge
-[license-url]: https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/github/contributors/cmh-germany/WikipediaInfoboxConsistencyChecker.svg?style=for-the-badge
+[contributors-url]: https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/cmh-germany/WikipediaInfoboxConsistencyChecker.svg?style=for-the-badge
+[forks-url]: https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/network/members
+[stars-shield]: https://img.shields.io/github/stars/cmh-germany/WikipediaInfoboxConsistencyChecker.svg?style=for-the-badge
+[stars-url]: https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/stargazers
+[issues-shield]: https://img.shields.io/github/issues/cmh-germany/WikipediaInfoboxConsistencyChecker.svg?style=for-the-badge
+[issues-url]: https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues
+[license-shield]: https://img.shields.io/github/license/cmh-germany/WikipediaInfoboxConsistencyChecker.svg?style=for-the-badge
+[license-url]: https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/blob/main/LICENSE
 [python-shield]: https://img.shields.io/badge/python-3.11%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white
 [python-url]: https://www.python.org/
 [python-badge]: https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white

@@ -5,7 +5,7 @@ before each API request, a run reserves the next free time slot in a
 small lock file and sleeps until that slot comes up. Several concurrent
 runs therefore each get slower instead of multiplying the load on
 de.wikipedia.org (see
-https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/17).
+https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/17).
 """
 
 import os
@@ -19,7 +19,7 @@ from pathlib import Path
 # Lives in the system temp folder rather than next to cache.json, so
 # runs from different working directories or clones of this repository
 # are paced together too.
-LOCK_FILE = Path(tempfile.gettempdir()) / "WikipediaTemplateChecker-api.lock"
+LOCK_FILE = Path(tempfile.gettempdir()) / "WikipediaInfoboxConsistencyChecker-api.lock"
 
 # Minimum time between two API requests, across all runs on this machine.
 MIN_INTERVAL_SECONDS = 0.5
