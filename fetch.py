@@ -21,7 +21,9 @@ API_URL = "https://de.wikipedia.org/w/api.php"
 
 # Wikipedia's policy requires a descriptive User-Agent with a way to
 # contact the maintainer. Adjust as needed.
-USER_AGENT = "WikipediaInfoboxConsistencyChecker/1.0 (local consistency checker; no bot flag)"
+USER_AGENT = (
+    "WikipediaInfoboxConsistencyChecker/1.0 (local consistency checker; no bot flag)"
+)
 
 # Real page title on German Wikipedia -- do not translate.
 TEMPLATE_NAME = "Vorlage:Infobox Leichtathlet"
