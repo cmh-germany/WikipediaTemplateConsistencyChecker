@@ -189,13 +189,22 @@ public, unauthenticated German Wikipedia API.
    the Prerequisites step — see [Troubleshooting](#troubleshooting) if
    `pip` alone doesn't work for you.)
 3. *(Windows only, if needed)* If installation fails with an error like
-   "Microsoft Visual C++ 14.0 or greater is required" (missing C compiler
-   for the optional `mwparserfromhell` speedup extension), install the
-   pure-Python variant instead:
+   "Microsoft Visual C++ 14.0 or greater is required", install the
+   pure-Python variant of `mwparserfromhell` instead. This is expected on
+   Python 3.14 and newer, the version python.org currently offers: there
+   are no ready-made packages of `mwparserfromhell` for these versions
+   yet, so pip tries to build its optional speedup extension, which needs
+   a C compiler that most Windows PCs don't have. In the same PowerShell
+   window, run:
    ```powershell
-   $env:WITH_EXTENSION = "0"   # PowerShell
+   $env:WITH_EXTENSION = "0"
    python -m pip install -r requirements.txt
    ```
+   The setting only lasts until you close that window, which is fine,
+   since it's only needed for the install. The pure-Python variant gives
+   identical results and is only slightly slower. A full `--scan` spends
+   most of its time waiting on Wikipedia anyway. Alternatively, use Python
+   3.13, which needs no workaround.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -668,9 +677,12 @@ throwaway file, never the real one in the temp folder).
 
 The same checks run automatically on GitHub Actions
 (`.github/workflows/ci.yml`) for every push to `main` and every pull
-request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
+request, on Python 3.11 through 3.15: `ruff format --check`, `ruff check`,
 `mypy`, and the test suite, which fails if overall coverage drops below
-80%.
+80%. An additional Windows job on the newest Python installs the
+dependencies with `WITH_EXTENSION=0`, just like step 3 of
+[Installation](#installation). This checks that the compiler-free install
+documented there keeps working.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -692,8 +704,12 @@ request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
   failed silently; re-run
   `python -m pip install -r requirements.txt` from inside the project
   folder and check its output for errors.
-* **"Microsoft Visual C++ 14.0 or greater is required"** during install
-  (Windows) — see step 3 of [Installation](#installation).
+* **"Microsoft Visual C++ 14.0 or greater is required"** or **"Failed
+  building wheel for mwparserfromhell"** during install (Windows, usually
+  Python 3.14 or newer) — nothing is wrong with your setup. Run
+  `$env:WITH_EXTENSION = "0"` in PowerShell, then repeat the install
+  command in the same window, as described in step 3 of
+  [Installation](#installation).
 * **`SSLCertVerificationError` / certificate errors** — usually caused by
   a corporate proxy or firewall intercepting HTTPS traffic (common on a
   work laptop). Ask your IT department, or try again on a private
