@@ -647,7 +647,7 @@ def main():
     """Parses CLI arguments and dispatches to run_check or run_scan.
     Returns a process exit code."""
     parser = argparse.ArgumentParser(
-        description="Consistency checker for Wikipedia Vorlage:Infobox templates",
+        description="WikipediaInfoboxConsistencyChecker - Consistency checker for Wikipedia Vorlage:Infobox templates",
     )
     parser.add_argument(
         "--version",
