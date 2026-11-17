@@ -668,9 +668,12 @@ throwaway file, never the real one in the temp folder).
 
 The same checks run automatically on GitHub Actions
 (`.github/workflows/ci.yml`) for every push to `main` and every pull
-request, on Python 3.11 through 3.14: `ruff format --check`, `ruff check`,
+request, on Python 3.11 through 3.15: `ruff format --check`, `ruff check`,
 `mypy`, and the test suite, which fails if overall coverage drops below
-80%.
+80%. An additional Windows job on the newest Python installs the
+dependencies with `WITH_EXTENSION=0`, just like step 3 of
+[Installation](#installation). This checks that the compiler-free install
+documented there keeps working.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
