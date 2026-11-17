@@ -5,7 +5,7 @@ before each API request, a run reserves the next free time slot in a
 small lock file and sleeps until that slot comes up. Several concurrent
 runs therefore each get slower instead of multiplying the load on
 de.wikipedia.org (see
-https://github.com/cmh-germany/WikipediaTemplateConsistencyChecker/issues/17).
+https://github.com/cmh-germany/WikipediaInfoboxConsistencyChecker/issues/17).
 """
 
 import os
