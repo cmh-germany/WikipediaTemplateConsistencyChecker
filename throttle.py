@@ -19,7 +19,7 @@ from pathlib import Path
 # Lives in the system temp folder rather than next to cache.json, so
 # runs from different working directories or clones of this repository
 # are paced together too.
-LOCK_FILE = Path(tempfile.gettempdir()) / "WikipediaTemplateChecker-api.lock"
+LOCK_FILE = Path(tempfile.gettempdir()) / "WikipediaInfoboxConsistencyChecker-api.lock"
 
 # Minimum time between two API requests, across all runs on this machine.
 MIN_INTERVAL_SECONDS = 0.5

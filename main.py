@@ -652,7 +652,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version=f"WikipediaTemplateConsistencyChecker {__version__}",
+        version=f"WikipediaInfoboxConsistencyChecker {__version__}",
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
